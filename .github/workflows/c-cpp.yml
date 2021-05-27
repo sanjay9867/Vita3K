@@ -33,9 +33,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [Android-latest, macos-latest, ubuntu-latest, windows-latest]
         config: [Release]
         include:
+          - os: Android-latest
           - os: macos-latest
             cache_path: ~/Library/Caches/ccache
           - os: ubuntu-latest
