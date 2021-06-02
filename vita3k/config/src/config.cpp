@@ -139,7 +139,7 @@ ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths)
         ->group("Options");
 
     // Positional options
-    app.add_option("vpk-path", command_line.vpk_path, "Path of app in .vpk format to install & run")
+    app.add_option("content-path", command_line.content_path, "Path of app in .vpk/.zip or folder of content to install & run")
         ->default_str({});
 
     // Grouped options
@@ -186,10 +186,6 @@ ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths)
         ->group("Modules");
     config->add_option("--" + cfg[e_log_level] + ",-l", command_line.log_level, "Logging level:\nTRACE = 0\nDEBUG = 1\nINFO = 2\nWARN = 3\nERROR = 4\nCRITICAL = 5\nOFF = 6")
         ->check(CLI::Range( 0, 6 ))->group("Logging");
-    config->add_flag("--" + cfg[e_log_imports] + ",-I", command_line.log_imports, "Log Imports")
-        ->group("Logging");
-    config->add_flag("--" + cfg[e_log_exports] + ",-E", command_line.log_exports, "Log Exports")
-        ->group("Logging");
     config->add_flag("--" + cfg[e_log_active_shaders] + ",-S", command_line.log_active_shaders, "Log Active Shaders")
         ->group("Logging");
     config->add_flag("--" + cfg[e_log_uniforms] + ",-U", command_line.log_uniforms, "Log Uniforms")
@@ -237,7 +233,7 @@ ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths)
         }
     }
 
-    if (cfg.console && (cfg.run_app_path || !cfg.vpk_path)) {
+    if (cfg.console && (cfg.run_app_path || !cfg.content_path)) {
         LOG_ERROR("Console mode only supports vpk for now");
         return InitConfigFailed;
     }
@@ -262,12 +258,10 @@ ExitCode init_config(Config &cfg, int argc, char **argv, const Root &root_paths)
 
         logging::set_level(static_cast<spdlog::level::level_enum>(cfg.log_level));
 
-        LOG_INFO_IF(cfg.vpk_path, "input-vpk-path: {}", *cfg.vpk_path);
+        LOG_INFO_IF(cfg.content_path, "input-content-path: {}", cfg.content_path->string());
         LOG_INFO_IF(cfg.run_app_path, "input-installed-path: {}", *cfg.run_app_path);
         LOG_INFO("{}: {}", cfg[e_backend_renderer], cfg.backend_renderer);
         LOG_INFO("{}: {}", cfg[e_log_level], cfg.log_level);
-        LOG_INFO_IF(cfg.log_imports, "{}: enabled", cfg[e_log_imports]);
-        LOG_INFO_IF(cfg.log_exports, "{}: enabled", cfg[e_log_exports]);
         LOG_INFO_IF(cfg.log_active_shaders, "{}: enabled", cfg[e_log_active_shaders]);
         LOG_INFO_IF(cfg.log_uniforms, "{}: enabled", cfg[e_log_uniforms]);
     }

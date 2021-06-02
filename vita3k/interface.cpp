@@ -19,12 +19,12 @@
 
 #include <gui/functions.h>
 #include <host/functions.h>
-#include <host/load_self.h>
 #include <host/pkg.h>
 #include <host/sfo.h>
 #include <io/device.h>
 #include <io/functions.h>
 #include <io/vfs.h>
+#include <kernel/load_self.h>
 
 #include <modules/module_parent.h>
 #include <touch/touch.h>
@@ -65,6 +65,21 @@ static bool read_file_from_zip(vfs::FileBuffer &buf, const fs::path &file, const
     }
 
     return true;
+}
+
+static bool is_nonpdrm(HostState &host, const fs::path &output_path) {
+    if (fs::exists(output_path / "sce_sys/package/work.bin")) {
+        std::string licpath = output_path.string() + "/sce_sys/package/work.bin";
+        LOG_INFO("Decrypt layer: {}", output_path.string());
+        if (!decrypt_install_nonpdrm(host, licpath, output_path.string())) {
+            LOG_ERROR("NoNpDrm installation failed, deleting data!");
+            fs::remove_all(output_path);
+            return false;
+        }
+        return true;
+    }
+
+    return false;
 }
 
 bool install_archive(HostState &host, GuiState *gui, const fs::path &archive_path, const std::function<void(float)> &progress_callback) {
@@ -115,33 +130,19 @@ bool install_archive(HostState &host, GuiState *gui, const fs::path &archive_pat
             theme = true;
 
         //This was here before to check if the game files were in the zip root, since this commit
-        // allows support for the game to be inside folders and install it anyways
-        //i thought we should comment this check
-
-        //edited to be compatible right away if someone wants to uncomment it
-
-        //if (m_filename.find(sfo_path.string()) != std::string::npos)
-        //break;
-
-        if (m_filename.find("eboot.bin") != std::string::npos) {
-            extra_path = m_filename.replace(m_filename.find("eboot.bin"), strlen("eboot.bin"), "");
-            continue;
-        }
+        // allows support for the content to be inside folders and install it anyways
+        if ((m_filename.find(sfo_path.string()) != std::string::npos) && (m_filename != sfo_path.string()))
+            extra_path = m_filename.erase(m_filename.find(sfo_path.string()));
     }
 
-    vfs::FileBuffer params;
-    if (!read_file_from_zip(params, fs::path(extra_path) / sfo_path, zip)) {
+    vfs::FileBuffer param;
+    if (!read_file_from_zip(param, fs::path(extra_path) / sfo_path, zip)) {
         fclose(vpk_fp);
         return false;
     }
 
-    SfoFile sfo_handle;
-    sfo::load(sfo_handle, params);
-    sfo::get_data_by_key(host.app_title_id, sfo_handle, "TITLE_ID");
-    sfo::get_data_by_key(host.app_title, sfo_handle, "TITLE");
-    sfo::get_data_by_key(host.app_version, sfo_handle, "APP_VER");
-    sfo::get_data_by_key(host.app_category, sfo_handle, "CATEGORY");
-    sfo::get_data_by_key(host.app_content_id, sfo_handle, "CONTENT_ID");
+    gui::get_param_info(host, param);
+
     fs::path output_path;
 
     if (host.app_category == "ac") {
@@ -185,14 +186,6 @@ bool install_archive(HostState &host, GuiState *gui, const fs::path &archive_pat
             } else if (status == gui::UNK_STATE) {
                 exit(0);
             }
-        } else if (gui->file_menu.archive_install_dialog && !gui->content_reinstall_confirm) {
-            vfs::FileBuffer params;
-            vfs::read_app_file(params, host.pref_path, host.app_title_id, sfo_path);
-            sfo::load(host.sfo_handle, params);
-            sfo::get_data_by_key(gui->app_ver, host.sfo_handle, "APP_VER");
-            gui->content_reinstall_confirm = true;
-            fclose(vpk_fp);
-            return false;
         }
     }
 
@@ -231,18 +224,11 @@ bool install_archive(HostState &host, GuiState *gui, const fs::path &archive_pat
     }
 
     if (fs::exists(output_path / "sce_sys/package/")) {
-        if (fs::exists(output_path / "sce_sys/package/work.bin")) {
-            std::string licpath = output_path.string() + "/sce_sys/package/work.bin";
-            update_progress();
-            if (!decrypt_install_nonpdrm(host, licpath, output_path.string())) {
-                LOG_ERROR("NoNpDrm installation failed, deleting data!");
-                fs::remove_all(output_path);
-                return false;
-            }
-            decrypt_progress = 100;
-        } else {
-            LOG_WARN("The nonpdrm license file (work.bin) is missing! If you're trying to install a NoNpDrm dump, please make sure that it is present in /sce_sys/package/ folder. Otherwise, ignore this warning.");
-        }
+        update_progress();
+        if (is_nonpdrm(host, output_path))
+            decrypt_progress = 100.f;
+        else
+            return false;
     }
 
     update_progress();
@@ -250,6 +236,105 @@ bool install_archive(HostState &host, GuiState *gui, const fs::path &archive_pat
     LOG_INFO("{} [{}] installed succesfully!", host.app_title_id, host.app_title);
     fclose(vpk_fp);
     return true;
+}
+
+static bool copy_directories(const fs::path &src_path, const fs::path &dst_path) {
+    try {
+        if (!fs::exists(dst_path))
+            fs::create_directory(dst_path);
+
+        for (const auto &src : fs::recursive_directory_iterator(src_path)) {
+            const auto dst_parent_path = dst_path / fs::relative(src, src_path).parent_path();
+
+            if (!fs::exists(dst_parent_path))
+                fs::create_directory(dst_parent_path);
+
+            LOG_INFO("Copy {}", (dst_parent_path / src.path().filename()).string());
+
+            if (fs::is_regular_file(src))
+                fs::copy_file(src, dst_parent_path / src.path().filename(), fs::copy_option::overwrite_if_exists);
+        }
+
+        return true;
+    } catch (std::exception &e) {
+        std::cout << e.what();
+        return false;
+    }
+}
+
+static std::vector<fs::path> get_contents_path(const fs::path &path) {
+    std::vector<fs::path> content_path;
+
+    for (const auto &p : fs::recursive_directory_iterator(path)) {
+        if (fs::is_regular_file(p) && (p.path().filename() == "param.sfo"))
+            content_path.push_back(p.path().parent_path().parent_path());
+    }
+
+    return content_path;
+}
+
+static bool install_content(HostState &host, GuiState *gui, const fs::path &content_path) {
+    const auto sfo_path{ content_path / "sce_sys/param.sfo" };
+
+    fs::ifstream sfo{ sfo_path, fs::ifstream::binary };
+    vfs::FileBuffer param;
+    sfo.unsetf(fs::ifstream::skipws);
+    param.reserve(fs::file_size(sfo_path));
+    param.insert(param.begin(), std::istream_iterator<uint8_t>(sfo), std::istream_iterator<uint8_t>());
+
+    if (param.empty()) {
+        LOG_ERROR("Param.sfo file is corrupted or missing in path", sfo_path.string());
+        return false;
+    }
+
+    gui::get_param_info(host, param);
+
+    fs::path dst_path;
+    if (host.app_category == "ac") {
+        if (fs::exists(content_path / "theme.xml")) {
+            dst_path = { fs::path(host.pref_path) / "ux0/theme" / host.app_content_id };
+            host.app_title += " (Theme)";
+            host.app_category = "theme";
+        } else {
+            host.app_content_id = host.app_content_id.substr(20);
+            dst_path = { fs::path(host.pref_path) / "ux0/addcont" / host.app_title_id / host.app_content_id };
+            host.app_title = host.app_title + " (DLC)";
+        }
+    } else if (host.app_category == "gp")
+        dst_path = { fs::path(host.pref_path) / "ux0/patch" / host.app_title_id };
+    else
+        dst_path = { fs::path(host.pref_path) / "ux0/app" / host.app_title_id };
+
+    if (!copy_directories(content_path, dst_path))
+        return false;
+
+    if (fs::exists(dst_path / "sce_sys/package/")) {
+        if (!is_nonpdrm(host, dst_path))
+            return false;
+    }
+
+    if (host.app_category == "gd")
+        gui::init_user_app(*gui, host, host.app_title_id);
+    gui::update_notice_info(*gui, host, "content");
+
+    LOG_INFO("{} [{}] installed succesfully!", host.app_title_id, host.app_title);
+    return true;
+}
+
+uint32_t install_contents(HostState &host, GuiState *gui, const fs::path &path) {
+    const auto src_path = get_contents_path(path);
+
+    LOG_WARN_IF(src_path.empty(), "No found any content compatible on this path: {}", path.string());
+
+    uint32_t installed = 0;
+    for (const auto &src : src_path) {
+        if (install_content(host, gui, src))
+            ++installed;
+    }
+
+    LOG_INFO_IF(installed, "Succesfully installed {} content!", installed);
+
+    return installed;
 }
 
 static auto pre_load_module(HostState &host, const std::vector<std::string> &lib_load_list, const VitaIoDevice &device) {
@@ -265,7 +350,7 @@ static auto pre_load_module(HostState &host, const std::vector<std::string> &lib
             res = vfs::read_file(device, module_buffer, host.pref_path, module_path);
 
         if (res) {
-            SceUID module_id = load_self(lib_entry_point, host.kernel, host.mem, module_buffer.data(), MODULE_PATH_ABS, host.cfg);
+            SceUID module_id = load_self(lib_entry_point, host.kernel, host.mem, module_buffer.data(), MODULE_PATH_ABS);
             if (module_id >= 0) {
                 const auto module = host.kernel.loaded_modules[module_id];
 
@@ -378,7 +463,7 @@ static ExitCode load_app_impl(Ptr<const void> &entry_point, HostState &host, con
     host.self_path = !host.cfg.self_path.empty() ? host.cfg.self_path : EBOOT_PATH;
     vfs::FileBuffer eboot_buffer;
     if (vfs::read_app_file(eboot_buffer, host.pref_path, host.io.app_path, host.self_path)) {
-        SceUID module_id = load_self(entry_point, host.kernel, host.mem, eboot_buffer.data(), "app0:" + host.self_path, host.cfg);
+        SceUID module_id = load_self(entry_point, host.kernel, host.mem, eboot_buffer.data(), "app0:" + host.self_path);
         if (module_id >= 0) {
             const auto module = host.kernel.loaded_modules[module_id];
 
@@ -467,8 +552,10 @@ bool handle_events(HostState &host, GuiState &gui) {
             const auto drop_file = fs::path(string_utils::utf_to_wide(event.drop.file));
             if ((drop_file.extension() == ".vpk") || (drop_file.extension() == ".zip"))
                 install_archive(host, &gui, drop_file);
-            else if ((drop_file.extension() == ".rif") || (drop_file.extension() == ".bin"))
+            else if ((drop_file.extension() == ".rif") || (drop_file.extension() == "work.bin"))
                 copy_license(host, drop_file);
+            else if (fs::is_directory(drop_file))
+                install_contents(host, &gui, drop_file);
             else
                 LOG_ERROR("File droped: [{}] is not supported.", drop_file.filename().string());
             SDL_free(event.drop.file);

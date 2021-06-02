@@ -25,10 +25,7 @@
 // Order is code(option_type, option_name, option_default, member_name)
 // When adding in a new macro for generation, ALL options must be stated.
 #define CONFIG_INDIVIDUAL(code)                                                                         \
-    code(bool, "log-imports", false, log_imports)                                                       \
-    code(bool, "dump-elfs", false, dump_elfs)                                                           \
     code(bool, "gdbstub", false, gdbstub)                                                               \
-    code(bool, "log-exports", false, log_exports)                                                       \
     code(bool, "log-active-shaders", false, log_active_shaders)                                         \
     code(bool, "log-uniforms", false, log_uniforms)                                                     \
     code(bool, "pstv-mode", false, pstv_mode)                                                           \
@@ -38,6 +35,7 @@
     code(int, "icon-size", 64, icon_size)                                                               \
     code(bool, "archive-log", false, archive_log)                                                       \
     code(bool, "texture-cache", true, texture_cache)                                                    \
+    code(bool, "hashless-texture-cache", false, hashless_taexture_cache)                                \
     code(bool, "disable-ngs", false, disable_ngs)                                                       \
     code(int, "sys-button", static_cast<int>(SCE_SYSTEM_PARAM_ENTER_BUTTON_CROSS), sys_button)          \
     code(int, "sys-lang", static_cast<int>(SCE_SYSTEM_PARAM_LANG_ENGLISH_US), sys_lang)                 \

@@ -581,7 +581,7 @@ EXPORT(int, sceGxmBeginScene, SceGxmContext *context, uint32_t flags, const SceG
     return 0;
 }
 
-EXPORT(int, sceGxmBeginSceneEx, SceGxmContext *immediateContext, uint32_t flags, const SceGxmRenderTarget *renderTarget, const SceGxmValidRegion *validRegion, SceGxmSyncObject *vertexSyncObject, SceGxmSyncObject *fragmentSyncObject, const SceGxmColorSurface *colorSurface, const SceGxmDepthStencilSurface *loadDepthStencilSurface, const SceGxmDepthStencilSurface *storeDepthStencilSurface) {
+EXPORT(int, sceGxmBeginSceneEx, SceGxmContext *immediateContext, uint32_t flags, const SceGxmRenderTarget *renderTarget, const SceGxmValidRegion *validRegion, SceGxmSyncObject *vertexSyncObject, Ptr<SceGxmSyncObject> fragmentSyncObject, const SceGxmColorSurface *colorSurface, const SceGxmDepthStencilSurface *loadDepthStencilSurface, const SceGxmDepthStencilSurface *storeDepthStencilSurface) {
     if (!immediateContext) {
         return RET_ERROR(SCE_GXM_ERROR_INVALID_POINTER);
     }
@@ -602,7 +602,8 @@ EXPORT(int, sceGxmBeginSceneEx, SceGxmContext *immediateContext, uint32_t flags,
         return RET_ERROR(SCE_GXM_ERROR_WITHIN_SCENE);
     }
 
-    return UNIMPLEMENTED();
+    STUBBED("Using sceGxmBeginScene");
+    return CALL_EXPORT(sceGxmBeginScene, immediateContext, flags, renderTarget, validRegion, vertexSyncObject, fragmentSyncObject, colorSurface, loadDepthStencilSurface);
 }
 
 EXPORT(void, sceGxmColorSurfaceGetClip, const SceGxmColorSurface *surface, uint32_t *xMin, uint32_t *yMin, uint32_t *xMax, uint32_t *yMax) {
@@ -1018,7 +1019,7 @@ static void gxmSetUniformBuffers(renderer::State &state, SceGxmContext *context,
 
         // Shift all buffer by 1.
         // The ideal is: default uniform buffer block has the binding of 14. Not really ideal, so i move it to 0, and buffer 0 to 1, etc..
-        std::uint32_t bytes_to_copy = sizes.at(i) * 16;
+        std::uint32_t bytes_to_copy = sizes.at(i) * 4;
         std::uint8_t **dest = renderer::set_uniform_buffer(state, context->renderer.get(), !program.is_fragment(), static_cast<int>((i + 1) % SCE_GXM_REAL_MAX_UNIFORM_BUFFER), bytes_to_copy);
 
         if (dest) {
@@ -2869,11 +2870,22 @@ EXPORT(void, sceGxmSetViewportEnable, SceGxmContext *context, SceGxmViewportMode
     }
 }
 
-EXPORT(int, sceGxmSetVisibilityBuffer, SceGxmContext *immediateContext, void *bufferBase, uint32_t stridePerCore) {
+EXPORT(int, sceGxmSetVisibilityBuffer, SceGxmContext *immediateContext, Ptr<void> bufferBase, uint32_t stridePerCore) {
     if (!immediateContext) {
         return RET_ERROR(SCE_GXM_ERROR_INVALID_POINTER);
     }
-    return UNIMPLEMENTED();
+
+    if (immediateContext->state.type != SCE_GXM_CONTEXT_TYPE_IMMEDIATE)
+        return RET_ERROR(SCE_GXM_ERROR_INVALID_VALUE);
+
+    if (bufferBase.address() & (SCE_GXM_VISIBILITY_ALIGNMENT - 1))
+        return RET_ERROR(SCE_GXM_ERROR_INVALID_ALIGNMENT);
+
+    STUBBED("Set all visible");
+
+    memset(bufferBase.get(host.mem), 0xFF, SCE_GXM_GPU_CORE_COUNT * stridePerCore);
+
+    return 0;
 }
 
 EXPORT(void, sceGxmSetWBufferEnable) {
