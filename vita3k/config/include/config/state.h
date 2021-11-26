@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -103,9 +103,10 @@ public:
     struct CurrentConfig {
         std::string cpu_backend;
         bool cpu_opt = true;
-        bool lle_kernel = false;
+        bool lle_driver_user = false;
         bool auto_lle = false;
         std::vector<std::string> lle_modules = {};
+        bool pstv_mode = false;
         bool disable_ngs = false;
         bool video_playing = true;
         bool disable_at9_decoder = false;
@@ -117,7 +118,7 @@ public:
         update_yaml();
     }
 
-    ~Config() = default;
+    ~Config() override = default;
 
     Config(const Config &rhs) {
         yaml_node = rhs.get();

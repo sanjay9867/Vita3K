@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <mem/allocator.h>
 
 BitmapAllocator::BitmapAllocator(const std::size_t total_bits)
@@ -33,7 +50,7 @@ int BitmapAllocator::force_fill(const std::uint32_t offset, const int size, cons
 
     if (end_bit <= 32) {
         // The bit we need to allocate is in single word
-        const std::uint32_t mask = ((~(0xFFFFFFFFU >> size)) >> set_bit);
+        const std::uint32_t mask = size == 32 ? 0xFFFFFFFFU : ((~(0xFFFFFFFFU >> size)) >> set_bit);
 
         if (or_mode) {
             *word = wval | mask;
@@ -162,6 +179,15 @@ int BitmapAllocator::allocate_from(const std::uint32_t start_offset, int &size, 
     return -1;
 }
 
+int BitmapAllocator::allocate_at(const std::uint32_t start_offset, int size) {
+    if (free_slot_count(start_offset, start_offset + size) != size) {
+        return -1;
+    }
+
+    force_fill(start_offset, size, false);
+    return 0;
+}
+
 static int number_of_set_bits(std::uint32_t i) {
     i = i - ((i >> 1) & 0x55555555);
     i = (i & 0x33333333) + ((i >> 2) & 0x33333333);
@@ -176,12 +202,12 @@ int BitmapAllocator::free_slot_count(const std::uint32_t offset, const std::uint
     const std::uint32_t beg_off = (offset >> 5);
     const std::uint32_t end_off = (offset_end >> 5);
 
-    if ((beg_off >= words.size()) || (end_off > words.size())) {
+    if (beg_off >= words.size()) {
         return -1;
     }
 
     std::uint32_t start_bit = offset;
-    const std::uint32_t end_bit = offset_end;
+    const std::uint32_t end_bit = end_off >= words.size() ? max_offset : offset_end;
 
     std::uint32_t free_count = 0;
 
@@ -189,8 +215,8 @@ int BitmapAllocator::free_slot_count(const std::uint32_t offset, const std::uint
         const std::uint32_t next_end_bit = std::min<std::uint32_t>(((start_bit + 32) >> 5) << 5, end_bit);
 
         const int left_shift = start_bit & 31;
-        const int right_shift = left_shift + (31 - (next_end_bit - 1) & 31);
-        std::uint32_t word_to_scan = words[start_bit >> 5] << left_shift >> right_shift;
+        const int right_shift = (31 - (next_end_bit - 1) & 31);
+        std::uint32_t word_to_scan = words[start_bit >> 5] << left_shift >> right_shift >> left_shift;
         free_count += number_of_set_bits(word_to_scan);
 
         start_bit = next_end_bit;

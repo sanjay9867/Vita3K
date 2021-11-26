@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <gxm/functions.h>
 
 namespace gxm {
@@ -28,9 +45,7 @@ size_t get_stride_in_bytes(const SceGxmTexture *texture) {
     return ((texture->mip_filter | (texture->min_filter << 1) | (texture->mip_count << 3) | (texture->lod_bias << 7)) + 1) * 4;
 }
 
-bool is_block_compressed_format(SceGxmTextureFormat src) {
-    const auto base_format = get_base_format(src);
-
+bool is_block_compressed_format(SceGxmTextureBaseFormat base_format) {
     return ((base_format == SCE_GXM_TEXTURE_BASE_FORMAT_PVRT2BPP)
         || (base_format == SCE_GXM_TEXTURE_BASE_FORMAT_PVRT4BPP)
         || (base_format == SCE_GXM_TEXTURE_BASE_FORMAT_PVRTII2BPP)
@@ -44,15 +59,11 @@ bool is_block_compressed_format(SceGxmTextureFormat src) {
         || (base_format == SCE_GXM_TEXTURE_BASE_FORMAT_SBC5));
 }
 
-bool is_paletted_format(SceGxmTextureFormat src) {
-    const auto base_format = get_base_format(src);
-
+bool is_paletted_format(SceGxmTextureBaseFormat base_format) {
     return base_format == SCE_GXM_TEXTURE_BASE_FORMAT_P8 || base_format == SCE_GXM_TEXTURE_BASE_FORMAT_P4;
 }
 
-bool is_yuv_format(SceGxmTextureFormat src) {
-    const auto base_format = get_base_format(src);
-
+bool is_yuv_format(SceGxmTextureBaseFormat base_format) {
     return ((base_format == SCE_GXM_TEXTURE_BASE_FORMAT_YUV420P2)
         || (base_format == SCE_GXM_TEXTURE_BASE_FORMAT_YUV420P3)
         || (base_format == SCE_GXM_TEXTURE_BASE_FORMAT_YUV422));

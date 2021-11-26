@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <renderer/functions.h>
 #include <renderer/profile.h>
 
@@ -12,8 +29,8 @@
 #include <utility>
 
 namespace renderer::gl {
-static bool load_shader(const char *hash, const char *extension, const char *base_path, char **destination, std::size_t &size_read) {
-    const auto shader_path = fs_utils::construct_file_name(base_path, "shaders", hash, extension);
+static bool load_shader(const char *hash, const char *extension, const char *base_path, const char *title_id, char **destination, std::size_t &size_read) {
+    const auto shader_path = fs_utils::construct_file_name(base_path, (fs::path("shaders") / title_id).string().c_str(), hash, extension);
     fs::ifstream is(shader_path, fs::ifstream::binary);
     if (!is) {
         return false;
@@ -47,11 +64,11 @@ R load_shader_generic(F genfunc, const SceGxmProgram &program, const FeatureStat
     std::size_t read_size = 0;
     R source;
 
-    if (load_shader(hash_text.data(), shader_type_str, base_path, nullptr, read_size)) {
+    if (load_shader(hash_text.data(), shader_type_str, base_path, title_id, nullptr, read_size)) {
         source.resize((read_size + sizeof(typename R::value_type) - 1) / sizeof(typename R::value_type));
 
         char *dest_pointer = reinterpret_cast<char *>(source.data());
-        load_shader(hash_text.data(), shader_type_str, base_path, &dest_pointer, read_size);
+        load_shader(hash_text.data(), shader_type_str, base_path, title_id, &dest_pointer, read_size);
     }
 
     if (source.empty()) {

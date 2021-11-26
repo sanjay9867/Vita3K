@@ -17,6 +17,7 @@
 
 #include "interface.h"
 
+#include <ctrl/functions.h>
 #include <gui/functions.h>
 #include <host/functions.h>
 #include <host/pkg.h>
@@ -27,6 +28,7 @@
 #include <kernel/load_self.h>
 
 #include <modules/module_parent.h>
+#include <touch/functions.h>
 #include <touch/touch.h>
 #include <util/find.h>
 #include <util/log.h>
@@ -68,8 +70,10 @@ static bool read_file_from_zip(vfs::FileBuffer &buf, const fs::path &file, const
 }
 
 static bool is_nonpdrm(HostState &host, const fs::path &output_path) {
-    if (fs::exists(output_path / "sce_sys/package/work.bin")) {
-        std::string licpath = output_path.string() + "/sce_sys/package/work.bin";
+    const auto app_license_path{ fs::path(host.pref_path) / "ux0/license" / host.app_title_id / fmt::format("{}.rif", host.app_content_id) };
+    const auto is_patch_found_app_license = (host.app_category == "gp") && fs::exists(app_license_path);
+    if (fs::exists(output_path / "sce_sys/package/work.bin") || is_patch_found_app_license) {
+        std::string licpath = is_patch_found_app_license ? app_license_path.string() : output_path.string() + "/sce_sys/package/work.bin";
         LOG_INFO("Decrypt layer: {}", output_path.string());
         if (!decrypt_install_nonpdrm(host, licpath, output_path.string())) {
             LOG_ERROR("NoNpDrm installation failed, deleting data!");
@@ -241,18 +245,18 @@ bool install_archive(HostState &host, GuiState *gui, const fs::path &archive_pat
 static bool copy_directories(const fs::path &src_path, const fs::path &dst_path) {
     try {
         if (!fs::exists(dst_path))
-            fs::create_directory(dst_path);
+            fs::create_directories(dst_path);
 
         for (const auto &src : fs::recursive_directory_iterator(src_path)) {
             const auto dst_parent_path = dst_path / fs::relative(src, src_path).parent_path();
+            const auto dst_path = dst_parent_path / src.path().filename();
 
-            if (!fs::exists(dst_parent_path))
-                fs::create_directory(dst_parent_path);
-
-            LOG_INFO("Copy {}", (dst_parent_path / src.path().filename()).string());
+            LOG_INFO("Copy {}", dst_path.string());
 
             if (fs::is_regular_file(src))
-                fs::copy_file(src, dst_parent_path / src.path().filename(), fs::copy_option::overwrite_if_exists);
+                fs::copy_file(src, dst_path, fs::copy_option::overwrite_if_exists);
+            else if (!fs::exists(dst_path))
+                fs::create_directory(dst_path);
         }
 
         return true;
@@ -305,8 +309,10 @@ static bool install_content(HostState &host, GuiState *gui, const fs::path &cont
     else
         dst_path = { fs::path(host.pref_path) / "ux0/app" / host.app_title_id };
 
-    if (!copy_directories(content_path, dst_path))
+    if (!copy_directories(content_path, dst_path)) {
+        LOG_ERROR("Failed to copy directory to: {}", dst_path.string());
         return false;
+    }
 
     if (fs::exists(dst_path / "sce_sys/package/")) {
         if (!is_nonpdrm(host, dst_path))
@@ -332,7 +338,10 @@ uint32_t install_contents(HostState &host, GuiState *gui, const fs::path &path) 
             ++installed;
     }
 
-    LOG_INFO_IF(installed, "Succesfully installed {} content!", installed);
+    if (installed) {
+        gui::save_apps_cache(*gui, host);
+        LOG_INFO("Succesfully installed {} content!", installed);
+    }
 
     return installed;
 }
@@ -392,6 +401,12 @@ static ExitCode load_app_impl(Ptr<const void> &entry_point, HostState &host, con
     LOG_INFO("at9 audio decoder state: {}", !host.cfg.current_config.disable_at9_decoder);
     LOG_INFO("ngs experimental state: {}", !host.cfg.current_config.disable_ngs);
     LOG_INFO("video player state: {}", host.cfg.current_config.video_playing);
+    refresh_controllers(host.ctrl);
+    if (host.ctrl.controllers_num) {
+        LOG_INFO("{} Controllers Connected", host.ctrl.controllers_num);
+        for (auto i = 0; i < host.ctrl.controllers_num; i++)
+            LOG_INFO("Controller {}: {}", i, host.ctrl.controllers_name[i]);
+    }
     if (host.cfg.current_config.auto_lle)
         LOG_INFO("{}: enabled", host.cfg[e_auto_lle]);
     else if (!host.cfg.current_config.lle_modules.empty()) {
@@ -416,10 +431,9 @@ static ExitCode load_app_impl(Ptr<const void> &entry_point, HostState &host, con
         host.kernel.export_nids.emplace(var.nid, addr);
     }
 
-    if (host.cfg.current_config.lle_kernel) {
-        // Load kernel pre-loaded module
+    if (host.cfg.current_config.lle_driver_user) {
+        // Load Driver User pre-loaded module
         const std::vector<std::string> lib_load_list = {
-            "us/libkernel.suprx",
             "us/driver_us.suprx",
         };
 
@@ -492,6 +506,8 @@ bool handle_events(HostState &host, GuiState &gui) {
         ImGui_ImplSdl_ProcessEvent(gui.imgui_state.get(), &event);
         switch (event.type) {
         case SDL_QUIT:
+            if (!host.io.app_path.empty())
+                gui::update_time_app_used(gui, host, host.io.app_path);
             host.kernel.exit_delete_all_threads();
             host.gxm.display_queue.abort();
             host.display.abort.exchange(true);

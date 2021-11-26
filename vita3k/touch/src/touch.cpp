@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,6 +15,7 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+#include <touch/functions.h>
 #include <touch/touch.h>
 
 #include <SDL_events.h>
@@ -146,7 +147,7 @@ int peek_touch(const HostState &host, const SceUInt32 &port, SceTouchData *pData
             ++pData->reportNum;
         }
 
-        if (!host.ctrl.touch_mode[port]) {
+        if (!host.touch.touch_mode[port]) {
             pData->reportNum = 0;
         }
     } else if (registered_touch() == true && port == touchscreen_port) {

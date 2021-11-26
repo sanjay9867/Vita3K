@@ -29,310 +29,340 @@
 #include <pugixml.hpp>
 
 #include <chrono>
-#include <sstream>
 #include <stb_image.h>
+
+enum TypeLang {
+    GUI,
+    LIVE_AREA,
+};
 
 namespace gui {
 static std::string start, resume;
+static std::map<TypeLang, std::string> user_lang;
 
 void init_lang(GuiState &gui, HostState &host) {
-    start.clear(), resume.clear();
+    start.clear(), resume.clear(), user_lang.clear();
     gui.lang = {};
-    auto &user_lang = gui.lang.user_lang;
+
+    const auto set_lang = [&](std::string lang) {
+        user_lang[GUI] = lang;
+        user_lang[LIVE_AREA] = lang;
+    };
+
     const auto sys_lang = static_cast<SceSystemParamLang>(host.cfg.sys_lang);
     switch (sys_lang) {
-    case SCE_SYSTEM_PARAM_LANG_JAPANESE: user_lang = "ja"; break;
-    case SCE_SYSTEM_PARAM_LANG_ENGLISH_US: user_lang = "en"; break;
-    case SCE_SYSTEM_PARAM_LANG_FRENCH: user_lang = "fr"; break;
-    case SCE_SYSTEM_PARAM_LANG_SPANISH: user_lang = "es"; break;
-    case SCE_SYSTEM_PARAM_LANG_GERMAN: user_lang = "de", start = u8"Starten", resume = u8"Fortfahren"; break;
-    case SCE_SYSTEM_PARAM_LANG_ITALIAN: user_lang = "it"; break;
-    case SCE_SYSTEM_PARAM_LANG_DUTCH: user_lang = "nl"; break;
-    case SCE_SYSTEM_PARAM_LANG_PORTUGUESE_PT: user_lang = "pt", start = u8"Iniciar", resume = u8"Continuar"; break;
-    case SCE_SYSTEM_PARAM_LANG_RUSSIAN: user_lang = "ru"; break;
-    case SCE_SYSTEM_PARAM_LANG_KOREAN: user_lang = "ko"; break;
-    case SCE_SYSTEM_PARAM_LANG_CHINESE_T: user_lang = "zh-t"; break;
-    case SCE_SYSTEM_PARAM_LANG_CHINESE_S: user_lang = "zh-s"; break;
-    case SCE_SYSTEM_PARAM_LANG_FINNISH: user_lang = "fi", start = u8"Rozpocznij", resume = u8"Jatka"; break;
-    case SCE_SYSTEM_PARAM_LANG_SWEDISH: user_lang = "sv", start = u8"Starta", resume = u8"Fortsätt"; break;
-    case SCE_SYSTEM_PARAM_LANG_DANISH: user_lang = "da", start = u8"Start", resume = u8"Fortsæt"; break;
-    case SCE_SYSTEM_PARAM_LANG_NORWEGIAN: user_lang = "no", start = u8"Start", resume = u8"Fortsett"; break;
-    case SCE_SYSTEM_PARAM_LANG_POLISH: user_lang = "pl", start = u8"Rozpocznij", resume = u8"Kontynuuj"; break;
-    case SCE_SYSTEM_PARAM_LANG_PORTUGUESE_BR: user_lang = "pt-br", start = u8"Iniciar", resume = u8"Continuar"; break;
-    case SCE_SYSTEM_PARAM_LANG_ENGLISH_GB: user_lang = "en-gb", start = u8"Start", resume = u8"Continue"; break;
-    case SCE_SYSTEM_PARAM_LANG_TURKISH: user_lang = "tr", start = u8"Başlat", resume = u8"Devam"; break;
+    case SCE_SYSTEM_PARAM_LANG_JAPANESE: set_lang("ja"); break;
+    case SCE_SYSTEM_PARAM_LANG_ENGLISH_US: set_lang("en"); break;
+    case SCE_SYSTEM_PARAM_LANG_FRENCH: set_lang("fr"); break;
+    case SCE_SYSTEM_PARAM_LANG_SPANISH: set_lang("es"); break;
+    case SCE_SYSTEM_PARAM_LANG_GERMAN: set_lang("de"); break;
+    case SCE_SYSTEM_PARAM_LANG_ITALIAN: set_lang("it"); break;
+    case SCE_SYSTEM_PARAM_LANG_DUTCH: set_lang("nl"); break;
+    case SCE_SYSTEM_PARAM_LANG_PORTUGUESE_PT: set_lang("pt"); break;
+    case SCE_SYSTEM_PARAM_LANG_RUSSIAN: set_lang("ru"); break;
+    case SCE_SYSTEM_PARAM_LANG_KOREAN: set_lang("ko"); break;
+    case SCE_SYSTEM_PARAM_LANG_CHINESE_T:
+        user_lang[GUI] = "zh-t";
+        user_lang[LIVE_AREA] = "ch";
+        break;
+    case SCE_SYSTEM_PARAM_LANG_CHINESE_S:
+        user_lang[GUI] = "zh-s";
+        user_lang[LIVE_AREA] = "zh";
+        break;
+    case SCE_SYSTEM_PARAM_LANG_FINNISH: set_lang("fi"); break;
+    case SCE_SYSTEM_PARAM_LANG_SWEDISH: set_lang("sv"); break;
+    case SCE_SYSTEM_PARAM_LANG_DANISH: set_lang("da"); break;
+    case SCE_SYSTEM_PARAM_LANG_NORWEGIAN: set_lang("no"); break;
+    case SCE_SYSTEM_PARAM_LANG_POLISH: set_lang("pl"); break;
+    case SCE_SYSTEM_PARAM_LANG_PORTUGUESE_BR: set_lang("pt-br"); break;
+    case SCE_SYSTEM_PARAM_LANG_ENGLISH_GB: set_lang("en-gb"); break;
+    case SCE_SYSTEM_PARAM_LANG_TURKISH: set_lang("tr"); break;
     default: break;
     }
 
     pugi::xml_document lang_xml;
     const auto lang_path{ fs::path(host.base_path) / "lang" };
-    const auto lang_xml_path = (lang_path / (user_lang + ".xml")).string();
+    const auto lang_xml_path = (lang_path / (user_lang[GUI] + ".xml")).string();
     if (fs::exists(lang_xml_path)) {
         if (lang_xml.load_file(lang_xml_path.c_str())) {
-            // Main Menu Bar
-            const auto main_menubar = lang_xml.child("main_menubar");
-            if (!main_menubar.empty()) {
-                // File Menu
-                const auto file = main_menubar.child("file");
-                auto &lang_main_menubar = gui.lang.main_menubar;
-                if (!file.empty()) {
-                    lang_main_menubar["file"] = file.attribute("name").as_string();
-                    lang_main_menubar["open_pref_path"] = file.child("open_pref_path").text().as_string();
-                    lang_main_menubar["install_firmware"] = file.child("install_firmware").text().as_string();
-                    lang_main_menubar["install_pkg"] = file.child("install_pkg").text().as_string();
-                    lang_main_menubar["install_zip"] = file.child("install_zip").text().as_string();
-                    lang_main_menubar["install_license"] = file.child("install_license").text().as_string();
-                }
-
-                // Emulation Menu
-                if (!main_menubar.child("emulation").empty()) {
-                    lang_main_menubar["emulation"] = main_menubar.child("emulation").attribute("name").as_string();
-                    lang_main_menubar["last_loaded_apps"] = main_menubar.child("emulation").child("last_loaded_apps").text().as_string();
-                }
-
-                // Configuration Menu
-                const auto configuration = main_menubar.child("configuration");
-                if (!configuration.empty()) {
-                    lang_main_menubar["configuration"] = configuration.attribute("name").as_string();
-                    lang_main_menubar["settings"] = configuration.child("settings").text().as_string();
-                    lang_main_menubar["user_management"] = configuration.child("user_management").text().as_string();
-                }
-
-                // Controls Menu
-                if (!main_menubar.child("controls").empty()) {
-                    lang_main_menubar["controls"] = main_menubar.child("controls").attribute("name").as_string();
-                    gui.lang.main_menubar["keyboard_controls"] = main_menubar.child("controls").child("keyboard_controls").text().as_string();
-                }
-
-                // Help Menu
-                if (!main_menubar.child("help").empty()) {
-                    lang_main_menubar["help"] = main_menubar.child("help").attribute("name").as_string();
-                    lang_main_menubar["about"] = main_menubar.child("help").child("about").text().as_string();
-                    lang_main_menubar["welcome"] = main_menubar.child("help").child("welcome").text().as_string();
-                }
-            }
-
-            // App Context
-            const auto app_context = lang_xml.child("app_context");
-            if (!app_context.empty()) {
-                auto &lang_app_context = gui.lang.app_context;
-                lang_app_context["update_history"] = app_context.child("update_history").text().as_string();
-                lang_app_context["information"] = app_context.child("information").text().as_string();
-                lang_app_context["app_delete"] = app_context.child("app_delete").text().as_string();
-                lang_app_context["save_delete"] = app_context.child("save_delete").text().as_string();
-                lang_app_context["name"] = app_context.child("name").text().as_string();
-                lang_app_context["trophy_earning"] = app_context.child("trophy_earning").text().as_string();
-                lang_app_context["eligible"] = app_context.child("trophy_earning").attribute("eligible").as_string();
-                lang_app_context["ineligible"] = app_context.child("trophy_earning").attribute("ineligible").as_string();
-                lang_app_context["parental_Controls"] = app_context.child("parental_Controls").text().as_string();
-                lang_app_context["level"] = app_context.child("parental_Controls").attribute("level").as_string();
-                lang_app_context["updated"] = app_context.child("updated").text().as_string();
-                lang_app_context["size"] = app_context.child("size").text().as_string();
-                lang_app_context["version"] = app_context.child("version").text().as_string();
-            }
-
-            // Common
-            if (!lang_xml.child("common").empty()) {
-                const auto common = lang_xml.child("common");
-                auto &common_dialog = host.common_dialog.lang.common;
-                common_dialog["cancel"] = common.child("cancel").text().as_string();
-                common_dialog["delete"] = common.child("delete").text().as_string();
-                common_dialog["file_corrupted"] = common.child("file_corrupted").text().as_string();
-                common_dialog["no"] = common.child("no").text().as_string();
-                common_dialog["select_all"] = common.child("select_all").text().as_string();
-                common_dialog["select"] = common.child("select").text().as_string();
-                common_dialog["please_wait"] = common.child("please_wait").text().as_string();
-                common_dialog["yes"] = common.child("yes").text().as_string();
-                auto &lang_common = gui.lang.common;
-                if (!common.child("wday").empty()) {
-                    for (const auto &day : common.child("wday"))
-                        lang_common.wday.push_back(day.text().as_string());
-                }
-                if (!common.child("ymonth").empty()) {
-                    for (const auto &month : common.child("ymonth"))
-                        lang_common.ymonth.push_back(month.text().as_string());
-                }
-                if (!common.child("small_ymonth").empty()) {
-                    for (const auto &month : common.child("small_ymonth"))
-                        lang_common.small_ymonth.push_back(month.text().as_string());
-                }
-                lang_common.common["hidden_trophy"] = common.child("hidden_trophy").text().as_string();
-                lang_common.common["one_hour_ago"] = common.child("one_hour_ago").text().as_string();
-                lang_common.common["one_minute_ago"] = common.child("one_minute_ago").text().as_string();
-                lang_common.common["bronze"] = common.child("bronze").text().as_string();
-                lang_common.common["gold"] = common.child("gold").text().as_string();
-                lang_common.common["platinum"] = common.child("platinum").text().as_string();
-                lang_common.common["silver"] = common.child("silver").text().as_string();
-                lang_common.common["hours_ago"] = common.child("hours_ago").text().as_string();
-                lang_common.common["minutes_ago"] = common.child("minutes_ago").text().as_string();
-            }
-
-            // Dialog
-            if (!lang_xml.child("dialog").empty()) {
-                const auto dialog = lang_xml.child("dialog");
-                // Trophy
-                if (!dialog.child("trophy").empty())
-                    host.common_dialog.lang.trophy["preparing_start_app"] = dialog.child("trophy").child("preparing_start_app").text().as_string();
-                // Save Data
-                if (!dialog.child("save_data").empty()) {
-                    auto &lang_save_data = host.common_dialog.lang.save_data;
-                    const auto save_data = dialog.child("save_data");
-                    if (!save_data.child("delete").empty()) {
-                        const auto delete_child = save_data.child("delete");
-                        lang_save_data["cancel_deleting"] = delete_child.child("cancel_deleting").text().as_string();
-                        lang_save_data["deletion_complete"] = delete_child.child("deletion_complete").text().as_string();
-                        lang_save_data["delete_saved_data"] = delete_child.child("delete_saved_data").text().as_string();
+            // Lang
+            const auto lang_child = lang_xml.child("lang");
+            if (!lang_child.empty()) {
+                // Main Menu Bar
+                const auto main_menubar = lang_child.child("main_menubar");
+                if (!main_menubar.empty()) {
+                    // File Menu
+                    const auto file = main_menubar.child("file");
+                    auto &lang_main_menubar = gui.lang.main_menubar;
+                    if (!file.empty()) {
+                        lang_main_menubar["file"] = file.attribute("name").as_string();
+                        lang_main_menubar["open_pref_path"] = file.child("open_pref_path").text().as_string();
+                        lang_main_menubar["install_firmware"] = file.child("install_firmware").text().as_string();
+                        lang_main_menubar["install_pkg"] = file.child("install_pkg").text().as_string();
+                        lang_main_menubar["install_zip"] = file.child("install_zip").text().as_string();
+                        lang_main_menubar["install_license"] = file.child("install_license").text().as_string();
                     }
-                    if (!save_data.child("info").empty()) {
-                        lang_save_data["details"] = save_data.child("info").child("details").text().as_string();
-                        lang_save_data["updated"] = save_data.child("info").child("updated").text().as_string();
+
+                    // Emulation Menu
+                    if (!main_menubar.child("emulation").empty()) {
+                        lang_main_menubar["emulation"] = main_menubar.child("emulation").attribute("name").as_string();
+                        lang_main_menubar["last_apps_used"] = main_menubar.child("emulation").child("last_apps_used").text().as_string();
                     }
-                    if (!save_data.child("load").empty()) {
-                        const auto load = save_data.child("load");
-                        lang_save_data["load"] = load.attribute("name").as_string();
-                        lang_save_data["cancel_loading"] = load.child("cancel_loading").text().as_string();
-                        lang_save_data["no_saved_data"] = load.child("no_saved_data").text().as_string();
-                        lang_save_data["load_complete"] = load.child("load_complete").text().as_string();
-                        lang_save_data["loading"] = load.child("loading").text().as_string();
-                        lang_save_data["load_saved_data"] = load.child("load_saved_data").text().as_string();
+
+                    // Configuration Menu
+                    const auto configuration = main_menubar.child("configuration");
+                    if (!configuration.empty()) {
+                        lang_main_menubar["configuration"] = configuration.attribute("name").as_string();
+                        lang_main_menubar["settings"] = configuration.child("settings").text().as_string();
+                        lang_main_menubar["user_management"] = configuration.child("user_management").text().as_string();
                     }
-                    if (!save_data.child("save").empty()) {
-                        const auto save = save_data.child("save");
-                        lang_save_data["save"] = save.attribute("name").as_string();
-                        lang_save_data["cancel_saving"] = save.child("cancel_saving").text().as_string();
-                        lang_save_data["could_not_save"] = save.child("could_not_save").text().as_string();
-                        lang_save_data["not_free_space"] = save.child("not_free_space").text().as_string();
-                        lang_save_data["new_saved_data"] = save.child("new_saved_data").text().as_string();
-                        lang_save_data["saving_complete"] = save.child("saving_complete").text().as_string();
-                        lang_save_data["save_the_data"] = save.child("save_the_data").text().as_string();
-                        lang_save_data["saving"] = save.child("saving").text().as_string();
-                        lang_save_data["warning_saving"] = save.child("warning_saving").text().as_string();
-                        lang_save_data["overwrite_saved_data"] = save.child("overwrite_saved_data").text().as_string();
+
+                    // Controls Menu
+                    if (!main_menubar.child("controls").empty()) {
+                        lang_main_menubar["controls"] = main_menubar.child("controls").attribute("name").as_string();
+                        gui.lang.main_menubar["keyboard_controls"] = main_menubar.child("controls").child("keyboard_controls").text().as_string();
+                    }
+
+                    // Help Menu
+                    if (!main_menubar.child("help").empty()) {
+                        lang_main_menubar["help"] = main_menubar.child("help").attribute("name").as_string();
+                        lang_main_menubar["about"] = main_menubar.child("help").child("about").text().as_string();
+                        lang_main_menubar["welcome"] = main_menubar.child("help").child("welcome").text().as_string();
                     }
                 }
-            }
 
-            // Game Data
-            if (!lang_xml.child("game_data").empty()) {
-                auto &lang_game_data = gui.lang.game_data;
-                const auto game_data = lang_xml.child("game_data");
-                lang_game_data["app_close"] = game_data.child("app_close").text().as_string();
-            }
+                // App Context
+                const auto app_context = lang_child.child("app_context");
+                if (!app_context.empty()) {
+                    auto &lang_app_context = gui.lang.app_context;
+                    lang_app_context["update_history"] = app_context.child("update_history").text().as_string();
+                    lang_app_context["information"] = app_context.child("information").text().as_string();
+                    lang_app_context["app_delete"] = app_context.child("app_delete").text().as_string();
+                    lang_app_context["save_delete"] = app_context.child("save_delete").text().as_string();
+                    lang_app_context["name"] = app_context.child("name").text().as_string();
+                    lang_app_context["trophy_earning"] = app_context.child("trophy_earning").text().as_string();
+                    lang_app_context["eligible"] = app_context.child("trophy_earning").attribute("eligible").as_string();
+                    lang_app_context["ineligible"] = app_context.child("trophy_earning").attribute("ineligible").as_string();
+                    lang_app_context["parental_Controls"] = app_context.child("parental_Controls").text().as_string();
+                    lang_app_context["level"] = app_context.child("parental_Controls").attribute("level").as_string();
+                    lang_app_context["updated"] = app_context.child("updated").text().as_string();
+                    lang_app_context["size"] = app_context.child("size").text().as_string();
+                    lang_app_context["version"] = app_context.child("version").text().as_string();
+                    lang_app_context["last_time_used"] = app_context.child("last_time_used").text().as_string();
+                    lang_app_context["never"] = app_context.child("never").text().as_string();
+                    lang_app_context["time_used"] = app_context.child("time_used").text().as_string();
+                }
 
-            // Indicator
-            if (!lang_xml.child("indicator").empty()) {
-                auto &lang_indicator = gui.lang.indicator;
-                const auto indicator = lang_xml.child("indicator");
-                lang_indicator["app_added_home"] = indicator.child("app_added_home").text().as_string();
-                lang_indicator["delete_all"] = indicator.child("delete_all").text().as_string();
-                lang_indicator["notif_deleted"] = indicator.child("notif_deleted").text().as_string();
-                lang_indicator["install_failed"] = indicator.child("install_failed").text().as_string();
-                lang_indicator["install_complete"] = indicator.child("install_complete").text().as_string();
-                lang_indicator["installing"] = indicator.child("installing").text().as_string();
-                lang_indicator["no_notif"] = indicator.child("no_notif").text().as_string();
-                lang_indicator["trophy_earned"] = indicator.child("trophy_earned").text().as_string();
-            }
+                // Common
+                const auto common = lang_child.child("common");
+                if (!common.empty()) {
+                    auto &common_dialog = host.common_dialog.lang.common;
+                    common_dialog["cancel"] = common.child("cancel").text().as_string();
+                    common_dialog["delete"] = common.child("delete").text().as_string();
+                    common_dialog["file_corrupted"] = common.child("file_corrupted").text().as_string();
+                    common_dialog["no"] = common.child("no").text().as_string();
+                    common_dialog["select_all"] = common.child("select_all").text().as_string();
+                    common_dialog["select"] = common.child("select").text().as_string();
+                    common_dialog["please_wait"] = common.child("please_wait").text().as_string();
+                    common_dialog["yes"] = common.child("yes").text().as_string();
+                    auto &lang_common = gui.lang.common;
+                    if (!common.child("wday").empty()) {
+                        for (const auto &day : common.child("wday"))
+                            lang_common.wday.push_back(day.text().as_string());
+                    }
+                    if (!common.child("ymonth").empty()) {
+                        for (const auto &month : common.child("ymonth"))
+                            lang_common.ymonth.push_back(month.text().as_string());
+                    }
+                    if (!common.child("small_ymonth").empty()) {
+                        for (const auto &month : common.child("small_ymonth"))
+                            lang_common.small_ymonth.push_back(month.text().as_string());
+                    }
+                    lang_common.common["hidden_trophy"] = common.child("hidden_trophy").text().as_string();
+                    lang_common.common["one_hour_ago"] = common.child("one_hour_ago").text().as_string();
+                    lang_common.common["one_minute_ago"] = common.child("one_minute_ago").text().as_string();
+                    lang_common.common["bronze"] = common.child("bronze").text().as_string();
+                    lang_common.common["gold"] = common.child("gold").text().as_string();
+                    lang_common.common["platinum"] = common.child("platinum").text().as_string();
+                    lang_common.common["silver"] = common.child("silver").text().as_string();
+                    lang_common.common["hours_ago"] = common.child("hours_ago").text().as_string();
+                    lang_common.common["minutes_ago"] = common.child("minutes_ago").text().as_string();
+                }
 
-            // Live Area
-            if (!lang_xml.child("live_area").empty()) {
-                start = lang_xml.child("live_area").child("start").text().as_string();
-                resume = lang_xml.child("live_area").child("continue").text().as_string();
-            }
-
-            // Settings
-            const auto settings = lang_xml.child("settings");
-            if (!settings.empty()) {
-                auto &lang_settings = gui.lang.settings;
-                lang_settings["settings"] = settings.attribute("name").as_string();
-                const auto theme_background = settings.child("theme_background");
-                if (!theme_background.empty()) {
-                    lang_settings["theme_background"] = theme_background.attribute("name").as_string();
-                    lang_settings["default"] = theme_background.attribute("default").as_string();
-                    const auto theme = theme_background.child("theme");
-                    // Theme
-                    if (!theme.empty()) {
-                        lang_settings["theme"] = theme.attribute("name").as_string();
-                        const auto information = theme.child("information");
-                        if (!information.empty()) {
-                            lang_settings["information"] = information.attribute("name").as_string();
-                            lang_settings["name"] = information.child("name").text().as_string();
-                            lang_settings["provider"] = information.child("provider").text().as_string();
-                            lang_settings["updated"] = information.child("updated").text().as_string();
-                            lang_settings["size"] = information.child("size").text().as_string();
-                            lang_settings["version"] = information.child("version").text().as_string();
+                // Dialog
+                const auto dialog = lang_child.child("dialog");
+                if (!dialog.empty()) {
+                    // Trophy
+                    if (!dialog.child("trophy").empty())
+                        host.common_dialog.lang.trophy["preparing_start_app"] = dialog.child("trophy").child("preparing_start_app").text().as_string();
+                    // Save Data
+                    if (!dialog.child("save_data").empty()) {
+                        auto &lang_save_data = host.common_dialog.lang.save_data;
+                        const auto save_data = dialog.child("save_data");
+                        if (!save_data.child("delete").empty()) {
+                            const auto delete_child = save_data.child("delete");
+                            lang_save_data["cancel_deleting"] = delete_child.child("cancel_deleting").text().as_string();
+                            lang_save_data["deletion_complete"] = delete_child.child("deletion_complete").text().as_string();
+                            lang_save_data["delete_saved_data"] = delete_child.child("delete_saved_data").text().as_string();
                         }
-                        lang_settings["delete"] = theme.child("delete").text().as_string();
+                        if (!save_data.child("info").empty()) {
+                            lang_save_data["details"] = save_data.child("info").child("details").text().as_string();
+                            lang_save_data["updated"] = save_data.child("info").child("updated").text().as_string();
+                        }
+                        if (!save_data.child("load").empty()) {
+                            const auto load = save_data.child("load");
+                            lang_save_data["load"] = load.attribute("name").as_string();
+                            lang_save_data["cancel_loading"] = load.child("cancel_loading").text().as_string();
+                            lang_save_data["no_saved_data"] = load.child("no_saved_data").text().as_string();
+                            lang_save_data["load_complete"] = load.child("load_complete").text().as_string();
+                            lang_save_data["loading"] = load.child("loading").text().as_string();
+                            lang_save_data["load_saved_data"] = load.child("load_saved_data").text().as_string();
+                        }
+                        if (!save_data.child("save").empty()) {
+                            const auto save = save_data.child("save");
+                            lang_save_data["save"] = save.attribute("name").as_string();
+                            lang_save_data["cancel_saving"] = save.child("cancel_saving").text().as_string();
+                            lang_save_data["could_not_save"] = save.child("could_not_save").text().as_string();
+                            lang_save_data["not_free_space"] = save.child("not_free_space").text().as_string();
+                            lang_save_data["new_saved_data"] = save.child("new_saved_data").text().as_string();
+                            lang_save_data["saving_complete"] = save.child("saving_complete").text().as_string();
+                            lang_save_data["save_the_data"] = save.child("save_the_data").text().as_string();
+                            lang_save_data["saving"] = save.child("saving").text().as_string();
+                            lang_save_data["warning_saving"] = save.child("warning_saving").text().as_string();
+                            lang_save_data["overwrite_saved_data"] = save.child("overwrite_saved_data").text().as_string();
+                        }
                     }
-                    lang_settings["start_screen"] = theme_background.child("start_screen").attribute("name").as_string();
-                    lang_settings["image"] = theme_background.child("start_screen").child("image").text().as_string();
-                    lang_settings["home_screen_backgrounds"] = theme_background.child("home_screen_backgrounds").text().as_string();
                 }
 
-                // Date & Time
-                if (!settings.child("date_time").empty()) {
+                // Game Data
+                const auto game_data = lang_child.child("game_data");
+                if (!game_data.empty()) {
+                    auto &lang_game_data = gui.lang.game_data;
+                    lang_game_data["app_close"] = game_data.child("app_close").text().as_string();
+                }
+
+                // Indicator
+                const auto indicator = lang_child.child("indicator");
+                if (!indicator.empty()) {
+                    auto &lang_indicator = gui.lang.indicator;
+                    lang_indicator["app_added_home"] = indicator.child("app_added_home").text().as_string();
+                    lang_indicator["delete_all"] = indicator.child("delete_all").text().as_string();
+                    lang_indicator["notif_deleted"] = indicator.child("notif_deleted").text().as_string();
+                    lang_indicator["install_failed"] = indicator.child("install_failed").text().as_string();
+                    lang_indicator["install_complete"] = indicator.child("install_complete").text().as_string();
+                    lang_indicator["installing"] = indicator.child("installing").text().as_string();
+                    lang_indicator["no_notif"] = indicator.child("no_notif").text().as_string();
+                    lang_indicator["trophy_earned"] = indicator.child("trophy_earned").text().as_string();
+                }
+
+                // Live Area
+                const auto live_area = lang_child.child("live_area");
+                if (!live_area.empty()) {
+                    start = live_area.child("start").text().as_string();
+                    resume = live_area.child("continue").text().as_string();
+                }
+
+                // Settings
+                const auto settings = lang_child.child("settings");
+                if (!settings.empty()) {
+                    auto &lang_settings = gui.lang.settings;
+                    lang_settings["settings"] = settings.attribute("name").as_string();
+                    const auto theme_background = settings.child("theme_background");
+                    if (!theme_background.empty()) {
+                        lang_settings["theme_background"] = theme_background.attribute("name").as_string();
+                        lang_settings["default"] = theme_background.attribute("default").as_string();
+                        const auto theme = theme_background.child("theme");
+                        // Theme
+                        if (!theme.empty()) {
+                            lang_settings["theme"] = theme.attribute("name").as_string();
+                            // Information
+                            const auto information = theme.child("information");
+                            if (!information.empty()) {
+                                lang_settings["information"] = information.attribute("name").as_string();
+                                lang_settings["name"] = information.child("name").text().as_string();
+                                lang_settings["provider"] = information.child("provider").text().as_string();
+                                lang_settings["updated"] = information.child("updated").text().as_string();
+                                lang_settings["size"] = information.child("size").text().as_string();
+                                lang_settings["version"] = information.child("version").text().as_string();
+                            }
+                            lang_settings["delete"] = theme.child("delete").text().as_string();
+                        }
+                        lang_settings["start_screen"] = theme_background.child("start_screen").attribute("name").as_string();
+                        lang_settings["image"] = theme_background.child("start_screen").child("image").text().as_string();
+                        lang_settings["home_screen_backgrounds"] = theme_background.child("home_screen_backgrounds").text().as_string();
+                    }
+
+                    // Date & Time
                     const auto date_time = settings.child("date_time");
-                    lang_settings["date_time"] = date_time.attribute("name").as_string();
-                    if (!date_time.child("date_format").empty()) {
+                    if (!date_time.empty()) {
+                        lang_settings["date_time"] = date_time.attribute("name").as_string();
+                        // Date Format
                         const auto date_format = date_time.child("date_format");
-                        lang_settings["date_format"] = date_format.attribute("name").as_string();
-                        lang_settings["yyyy_mm_dd"] = date_format.child("yyyy_mm_dd").text().as_string();
-                        lang_settings["dd_mm_yyyy"] = date_format.child("dd_mm_yyyy").text().as_string();
-                        lang_settings["mm_dd_yyyy"] = date_format.child("mm_dd_yyyy").text().as_string();
-                    }
-                    if (!date_time.child("time_format").empty()) {
+                        if (!date_format.empty()) {
+                            lang_settings["date_format"] = date_format.attribute("name").as_string();
+                            lang_settings["yyyy_mm_dd"] = date_format.child("yyyy_mm_dd").text().as_string();
+                            lang_settings["dd_mm_yyyy"] = date_format.child("dd_mm_yyyy").text().as_string();
+                            lang_settings["mm_dd_yyyy"] = date_format.child("mm_dd_yyyy").text().as_string();
+                        }
+                        // Time Format
                         const auto time_format = date_time.child("time_format");
-                        lang_settings["time_format"] = time_format.attribute("name").as_string();
-                        lang_settings["12_hour_clock"] = time_format.child("clock_12_hour").text().as_string();
-                        lang_settings["24_hour_clock"] = time_format.child("clock_24_hour").text().as_string();
+                        if (!time_format.empty()) {
+                            lang_settings["time_format"] = time_format.attribute("name").as_string();
+                            lang_settings["12_hour_clock"] = time_format.child("clock_12_hour").text().as_string();
+                            lang_settings["24_hour_clock"] = time_format.child("clock_24_hour").text().as_string();
+                        }
+                    }
+
+                    // Languague
+                    const auto language = settings.child("language");
+                    if (!language.empty()) {
+                        lang_settings["language"] = language.attribute("name").as_string();
+                        lang_settings["system_language"] = language.child("system_language").text().as_string();
+                        // Input Languague
+                        const auto input_language = language.child("input_language");
+                        if (!input_language.empty()) {
+                            lang_settings["input_language"] = input_language.attribute("name").as_string();
+                            // Keyboards
+                            const auto keyboards = input_language.child("keyboards");
+                            if (!keyboards.empty()) {
+                                lang_settings["keyboards"] = keyboards.attribute("name").as_string();
+                                auto &lang_ime = host.ime.languages;
+                                for (const auto &lang : keyboards.child("ime_langagues"))
+                                    lang_ime.push_back({ SceImeLanguage(lang.attribute("id").as_ullong()), lang.text().as_string() });
+                            }
+                        }
                     }
                 }
 
-                // Languague
-                lang_settings["language"] = settings.child("language").attribute("name").as_string();
-                lang_settings["system_language"] = settings.child("language").child("system_language").text().as_string();
-
-                // Input Languague
-                if (!settings.child("language").child("input_language").empty()) {
-                    const auto input_language = settings.child("language").child("input_language");
-                    lang_settings["input_language"] = input_language.attribute("name").as_string();
-                    if (!input_language.child("keyboards").empty()) {
-                        const auto keyboards = input_language.child("keyboards");
-                        lang_settings["keyboards"] = keyboards.attribute("name").as_string();
-                        auto &lang_ime = host.ime.languages;
-                        for (const auto &lang : keyboards.child("ime_langagues"))
-                            lang_ime.push_back({ SceImeLanguage(lang.attribute("id").as_uint()), lang.text().as_string() });
-                    }
+                // Trophy Collection
+                const auto trophy_collection = lang_child.child("trophy_collection");
+                if (!trophy_collection.empty()) {
+                    auto &lang_trophy_collection = gui.lang.trophy_collection;
+                    lang_trophy_collection["details"] = trophy_collection.child("details").text().as_string();
+                    lang_trophy_collection["earned"] = trophy_collection.child("earned").text().as_string();
+                    lang_trophy_collection["name"] = trophy_collection.child("name").text().as_string();
+                    lang_trophy_collection["no_trophies"] = trophy_collection.child("no_trophies").text().as_string();
+                    lang_trophy_collection["not_earned"] = trophy_collection.child("not_earned").text().as_string();
+                    lang_trophy_collection["original"] = trophy_collection.child("original").text().as_string();
+                    lang_trophy_collection["sort"] = trophy_collection.child("sort").text().as_string();
+                    lang_trophy_collection["trophies"] = trophy_collection.child("trophies").text().as_string();
+                    lang_trophy_collection["grade"] = trophy_collection.child("grade").text().as_string();
+                    lang_trophy_collection["progress"] = trophy_collection.child("progress").text().as_string();
+                    lang_trophy_collection["updated"] = trophy_collection.child("updated").text().as_string();
                 }
-            }
 
-            // Trophy Collection
-            if (!lang_xml.child("trophy_collection").empty()) {
-                const auto trophy_collection = lang_xml.child("trophy_collection");
-                auto &lang_trophy_collection = gui.lang.trophy_collection;
-                lang_trophy_collection["details"] = trophy_collection.child("details").text().as_string();
-                lang_trophy_collection["earned"] = trophy_collection.child("earned").text().as_string();
-                lang_trophy_collection["name"] = trophy_collection.child("name").text().as_string();
-                lang_trophy_collection["no_trophies"] = trophy_collection.child("no_trophies").text().as_string();
-                lang_trophy_collection["not_earned"] = trophy_collection.child("not_earned").text().as_string();
-                lang_trophy_collection["original"] = trophy_collection.child("original").text().as_string();
-                lang_trophy_collection["sort"] = trophy_collection.child("sort").text().as_string();
-                lang_trophy_collection["trophies"] = trophy_collection.child("trophies").text().as_string();
-                lang_trophy_collection["grade"] = trophy_collection.child("grade").text().as_string();
-                lang_trophy_collection["progress"] = trophy_collection.child("progress").text().as_string();
-                lang_trophy_collection["updated"] = trophy_collection.child("updated").text().as_string();
-            }
-
-            // User Management
-            const auto user_management = lang_xml.child("user_management");
-            if (!user_management.empty()) {
-                auto &lang_user_management = gui.lang.user_management;
-                lang_user_management["create_user"] = user_management.child("create_user").text().as_string();
-                lang_user_management["edit_user"] = user_management.child("edit_user").text().as_string();
-                lang_user_management["delete_user"] = user_management.child("delete_user").text().as_string();
-                lang_user_management["change_avatar"] = user_management.child("change_avatar").text().as_string();
-                lang_user_management["name"] = user_management.child("name").text().as_string();
-                lang_user_management["user"] = user_management.child("user").text().as_string();
-                lang_user_management["confirm"] = user_management.child("confirm").text().as_string();
+                // User Management
+                const auto user_management = lang_child.child("user_management");
+                if (!user_management.empty()) {
+                    auto &lang_user_management = gui.lang.user_management;
+                    lang_user_management["create_user"] = user_management.child("create_user").text().as_string();
+                    lang_user_management["edit_user"] = user_management.child("edit_user").text().as_string();
+                    lang_user_management["delete_user"] = user_management.child("delete_user").text().as_string();
+                    lang_user_management["change_avatar"] = user_management.child("change_avatar").text().as_string();
+                    lang_user_management["name"] = user_management.child("name").text().as_string();
+                    lang_user_management["user"] = user_management.child("user").text().as_string();
+                    lang_user_management["confirm"] = user_management.child("confirm").text().as_string();
+                }
             }
         } else
             LOG_ERROR("Error open lang file xml: {}", lang_xml_path);
@@ -347,14 +377,6 @@ void init_lang(GuiState &gui, HostState &host) {
 bool get_sys_apps_state(GuiState &gui) {
     return !gui.live_area.content_manager && !gui.live_area.settings && !gui.live_area.trophy_collection && !gui.live_area.manual && !gui.live_area.user_management;
 }
-
-#ifdef _WIN32
-static const char OS_PREFIX[] = "start ";
-#elif __APPLE__
-static const char OS_PREFIX[] = "open ";
-#else
-static const char OS_PREFIX[] = "xdg-open ";
-#endif
 
 struct FRAME {
     std::string id;
@@ -451,7 +473,7 @@ void init_live_area(GuiState &gui, HostState &host) {
         items_pos["psmobile"]["frame4"]["size"] = ImVec2(440.f, 34.f);
     }
 
-    const auto user_lang = gui.lang.user_lang;
+    const auto live_area_lang = user_lang[LIVE_AREA];
     const auto app_path = gui.apps_list_opened[gui.current_app_selected];
     const auto is_sys_app = app_path.find("NPXS") != std::string::npos;
     const auto is_ps_app = app_path.find("PCS") != std::string::npos;
@@ -493,10 +515,10 @@ void init_live_area(GuiState &gui, HostState &host) {
 
             if (!doc.child("livearea").child("livearea-background").child("image").child("lang").text().empty()) {
                 for (const auto &livearea_background : doc.child("livearea").child("livearea-background")) {
-                    if (livearea_background.child("lang").text().as_string() == user_lang) {
+                    if (livearea_background.child("lang").text().as_string() == live_area_lang) {
                         name["livearea-background"] = livearea_background.text().as_string();
                         break;
-                    } else if (!livearea_background.child("exclude-lang").empty() && livearea_background.child("exclude-lang").text().as_string() != user_lang) {
+                    } else if (!livearea_background.child("exclude-lang").empty() && livearea_background.child("exclude-lang").text().as_string() != live_area_lang) {
                         name["livearea-background"] = livearea_background.text().as_string();
                         break;
                     } else if (livearea_background.attribute("default").as_string() == std::string("on")) {
@@ -513,19 +535,19 @@ void init_live_area(GuiState &gui, HostState &host) {
             if (!default_contents) {
                 for (const auto &gate : doc.child("livearea").child("gate")) {
                     if (gate.child("lang")) {
-                        if (gate.child("lang").text().as_string() == user_lang) {
+                        if (gate.child("lang").text().as_string() == live_area_lang) {
                             name["gate"] = gate.text().as_string();
                             break;
                         } else if (gate.attribute("default").as_string() == std::string("on"))
                             name["gate"] = gate.text().as_string();
                         else
                             for (const auto &lang : gate)
-                                if (lang.text().as_string() == user_lang) {
+                                if (lang.text().as_string() == live_area_lang) {
                                     name["gate"] = gate.text().as_string();
                                     break;
                                 }
                     } else if (gate.child("cntry")) {
-                        if (gate.child("cntry").attribute("lang").as_string() == user_lang) {
+                        if (gate.child("cntry").attribute("lang").as_string() == live_area_lang) {
                             name["gate"] = gate.text().as_string();
                             break;
                         } else
@@ -652,7 +674,7 @@ void init_live_area(GuiState &gui, HostState &host) {
                         if (frame_id.name() == std::string("liveitem")) {
                             if (!frame_id.child("cntry").empty()) {
                                 for (const auto &cntry : frame_id) {
-                                    if ((cntry.name() == std::string("cntry")) && (cntry.attribute("lang").as_string() == user_lang)) {
+                                    if ((cntry.name() == std::string("cntry")) && (cntry.attribute("lang").as_string() == live_area_lang)) {
                                         if (!frame_id.child("background").text().empty())
                                             items_name[frame]["background"].push_back({ frame_id.child("background").text().as_string() });
                                         if (!frame_id.child("image").text().empty())
@@ -669,7 +691,7 @@ void init_live_area(GuiState &gui, HostState &host) {
                             } else if (!frame_id.child("exclude-lang").empty()) {
                                 bool exclude_lang = false;
                                 for (const auto &liveitem : frame_id)
-                                    if ((liveitem.name() == std::string("exclude-lang")) && (liveitem.text().as_string() == user_lang)) {
+                                    if ((liveitem.name() == std::string("exclude-lang")) && (liveitem.text().as_string() == live_area_lang)) {
                                         exclude_lang = true;
                                         break;
                                     }
@@ -686,7 +708,7 @@ void init_live_area(GuiState &gui, HostState &host) {
                                     }
                                     break;
                                 }
-                            } else if (frame_id.child("lang").text().as_string() == user_lang) {
+                            } else if (frame_id.child("lang").text().as_string() == live_area_lang) {
                                 if (!frame_id.child("background").text().empty())
                                     items_name[frame]["background"].push_back({ frame_id.child("background").text().as_string() });
                                 if (!frame_id.child("image").text().empty())
@@ -851,7 +873,7 @@ void draw_live_area_screen(GuiState &gui, HostState &host) {
         ImGui::GetBackgroundDrawList()->AddImage((gui.users[host.io.user_id].use_theme_bg && !gui.theme_backgrounds.empty()) ? gui.theme_backgrounds[gui.current_theme_bg] : gui.user_backgrounds[gui.users[host.io.user_id].backgrounds[gui.current_user_bg]],
             ImVec2(0.f, 32.f), display_size);
     else
-        ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0.f, INFORMATION_BAR_HEIGHT), display_size, IM_COL32(11.f, 90.f, 252.f, 180.f), 0.f, ImDrawCornerFlags_All);
+        ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0.f, INFORMATION_BAR_HEIGHT), display_size, IM_COL32(11.f, 90.f, 252.f, 180.f), 0.f, ImDrawFlags_RoundCornersAll);
 
     const auto background_pos = ImVec2(900.0f * SCALE.x, 500.0f * SCALE.y);
     const auto pos_bg = ImVec2(display_size.x - background_pos.x, display_size.y - background_pos.y);
@@ -860,7 +882,7 @@ void draw_live_area_screen(GuiState &gui, HostState &host) {
     if (gui.live_area_contents[app_path].find("livearea-background") != gui.live_area_contents[app_path].end())
         ImGui::GetWindowDrawList()->AddImage(gui.live_area_contents[app_path]["livearea-background"], pos_bg, ImVec2(pos_bg.x + background_size.x, pos_bg.y + background_size.y));
     else
-        ImGui::GetWindowDrawList()->AddRectFilled(pos_bg, ImVec2(pos_bg.x + background_size.x, pos_bg.y + background_size.y), IM_COL32(148.f, 164.f, 173.f, 255.f), 0.f, ImDrawCornerFlags_All);
+        ImGui::GetWindowDrawList()->AddRectFilled(pos_bg, ImVec2(pos_bg.x + background_size.x, pos_bg.y + background_size.y), IM_COL32(148.f, 164.f, 173.f, 255.f), 0.f, ImDrawFlags_RoundCornersAll);
 
     for (const auto &frame : frames[app_path]) {
         if (frame.autoflip != 0) {
@@ -1004,7 +1026,7 @@ void draw_live_area_screen(GuiState &gui, HostState &host) {
             ImGui::SetCursorPos(pos_frame);
             ImGui::PushID(frame.id.c_str());
             if (ImGui::Selectable("##target_link", false, ImGuiSelectableFlags_None, scal_size_frame))
-                system((OS_PREFIX + target[app_path][frame.id]).c_str());
+                open_path(target[app_path][frame.id]);
             ImGui::PopID();
         }
 
@@ -1247,14 +1269,14 @@ void draw_live_area_screen(GuiState &gui, HostState &host) {
         ImGui::Image(gui.live_area_contents[app_path]["gate"], GATE_SIZE);
     }
     ImGui::PushID(app_path.c_str());
-    ImGui::GetWindowDrawList()->AddRectFilled(POS_BUTTON, ImVec2(POS_BUTTON.x + START_BUTTON_SIZE.x, POS_BUTTON.y + START_BUTTON_SIZE.y), IM_COL32(20, 168, 222, 255), 10.0f * SCALE.x, ImDrawCornerFlags_All);
+    ImGui::GetWindowDrawList()->AddRectFilled(POS_BUTTON, ImVec2(POS_BUTTON.x + START_BUTTON_SIZE.x, POS_BUTTON.y + START_BUTTON_SIZE.y), IM_COL32(20, 168, 222, 255), 10.0f * SCALE.x, ImDrawFlags_RoundCornersAll);
     ImGui::GetWindowDrawList()->AddText(gui.vita_font, default_font_scale, POS_START, IM_COL32(255, 255, 255, 255), BUTTON_STR.c_str());
     ImGui::SetCursorPos(SELECT_POS);
     ImGui::SetCursorPos(SELECT_POS);
     if (ImGui::Selectable("##gate", false, ImGuiSelectableFlags_None, SELECT_SIZE) || ImGui::IsKeyPressed(host.cfg.keyboard_button_cross))
         pre_run_app(gui, host, app_path);
     ImGui::PopID();
-    ImGui::GetWindowDrawList()->AddRect(GATE_POS, SIZE_GATE, IM_COL32(192, 192, 192, 255), 10.f * SCALE.x, ImDrawCornerFlags_All, 12.f * SCALE.x);
+    ImGui::GetWindowDrawList()->AddRect(GATE_POS, SIZE_GATE, IM_COL32(192, 192, 192, 255), 10.f * SCALE.x, ImDrawFlags_RoundCornersAll, 12.f * SCALE.x);
 
     if (app_device == VitaIoDevice::ux0) {
         const auto widget_scal_size = ImVec2(80.0f * SCALE.x, 80.f * SCALE.y);
@@ -1271,13 +1293,13 @@ void draw_live_area_screen(GuiState &gui, HostState &host) {
         const auto SEARCH_SCAL_SIZE = ImVec2((ImGui::CalcTextSize(SEARCH.c_str()).x * scal_widget_font_size) * SCALE.x, (ImGui::CalcTextSize(SEARCH.c_str()).y * scal_widget_font_size) * SCALE.y);
         const auto POS_STR_SEARCH = ImVec2(pos_scal_search.x + ((widget_scal_size.x / 2.f) - (SEARCH_SCAL_SIZE.x / 2.f)),
             pos_scal_search.y + ((widget_scal_size.x / 2.f) - (SEARCH_SCAL_SIZE.y / 2.f)));
-        ImGui::GetWindowDrawList()->AddRectFilled(pos_scal_search, ImVec2(pos_scal_search.x + widget_scal_size.x, pos_scal_search.y + widget_scal_size.y), IM_COL32(20, 168, 222, 255), 12.0f * SCALE.x, ImDrawCornerFlags_All);
+        ImGui::GetWindowDrawList()->AddRectFilled(pos_scal_search, ImVec2(pos_scal_search.x + widget_scal_size.x, pos_scal_search.y + widget_scal_size.y), IM_COL32(20, 168, 222, 255), 12.0f * SCALE.x, ImDrawFlags_RoundCornersAll);
         ImGui::GetWindowDrawList()->AddText(gui.vita_font, 23.0f * SCALE.x, POS_STR_SEARCH, IM_COL32(255, 255, 255, 255), SEARCH.c_str());
         ImGui::SetCursorPos(pos_scal_search);
         if (ImGui::Selectable("##Search", ImGuiSelectableFlags_None, false, widget_scal_size)) {
             auto search_url = "http://www.google.com/search?q=" + get_app_index(gui, app_path)->title;
             std::replace(search_url.begin(), search_url.end(), ' ', '+');
-            system((OS_PREFIX + search_url).c_str());
+            open_path(search_url);
         }
 
         if (fs::exists(manual_path) && !fs::is_empty(manual_path)) {
@@ -1288,7 +1310,7 @@ void draw_live_area_screen(GuiState &gui, HostState &host) {
             const auto MANUAL_STR_SCAL_SIZE = ImVec2((ImGui::CalcTextSize(MANUAL_STR.c_str()).x * scal_widget_font_size) * SCALE.x, (ImGui::CalcTextSize(MANUAL_STR.c_str()).y * scal_widget_font_size) * SCALE.y);
             const auto MANUAL_STR_POS = ImVec2(pos_scal_manual.x + ((widget_scal_size.x / 2.f) - (MANUAL_STR_SCAL_SIZE.x / 2.f)),
                 pos_scal_manual.y + ((widget_scal_size.x / 2.f) - (MANUAL_STR_SCAL_SIZE.y / 2.f)));
-            ImGui::GetWindowDrawList()->AddRectFilled(pos_scal_manual, ImVec2(pos_scal_manual.x + widget_scal_size.x, pos_scal_manual.y + widget_scal_size.y), IM_COL32(202, 0, 106, 255), 12.0f * SCALE.x, ImDrawCornerFlags_All);
+            ImGui::GetWindowDrawList()->AddRectFilled(pos_scal_manual, ImVec2(pos_scal_manual.x + widget_scal_size.x, pos_scal_manual.y + widget_scal_size.y), IM_COL32(202, 0, 106, 255), 12.0f * SCALE.x, ImDrawFlags_RoundCornersAll);
             ImGui::GetWindowDrawList()->AddText(gui.vita_font, 23.0f * SCALE.x, MANUAL_STR_POS, IM_COL32(255, 255, 255, 255), MANUAL_STR.c_str());
             ImGui::SetCursorPos(pos_scal_manual);
             if (ImGui::Selectable("##manual", ImGuiSelectableFlags_None, false, widget_scal_size)) {
@@ -1307,6 +1329,7 @@ void draw_live_area_screen(GuiState &gui, HostState &host) {
         ImGui::SetCursorPos(ImVec2(display_size.x - (60.0f * SCALE.x) - BUTTON_SIZE.x, 44.0f * SCALE.y));
         if (ImGui::Button("Esc", BUTTON_SIZE) || ImGui::IsKeyPressed(host.cfg.keyboard_button_circle)) {
             if (app_path == host.io.app_path) {
+                update_time_app_used(gui, host, app_path);
                 host.kernel.exit_delete_all_threads();
                 host.load_exec = true;
             } else {
@@ -1330,8 +1353,8 @@ void draw_live_area_screen(GuiState &gui, HostState &host) {
             ImGui::TextColored(GUI_COLOR_TEXT, "Using configuration set for keyboard in control setting");
             if (gui.modules.empty()) {
                 ImGui::Spacing();
-                ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2.f - (ImGui::CalcTextSize("Firmware not detected, Install it is recommended for font text in Livea Area").x / 2.f));
-                ImGui::TextColored(GUI_COLOR_TEXT, "Firmware not detected, Install it is recommended for font text in Livea Area");
+                ImGui::SetCursorPosX(ImGui::GetWindowWidth() / 2.f - (ImGui::CalcTextSize("Firmware not detected. Installing it is recommended for font text in Live Area").x / 2.f));
+                ImGui::TextColored(GUI_COLOR_TEXT, "Firmware not detected. Installing it is recommended for font text in Live Area");
             }
             ImGui::Spacing();
             ImGui::Separator();

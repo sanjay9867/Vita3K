@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <ngs/modules/atrac9.h>
 #include <util/bytes.h>
 #include <util/log.h>
@@ -49,7 +66,7 @@ void Module::on_state_change(ModuleData &data, const VoiceState previous) {
 }
 
 bool Module::process(KernelState &kern, const MemState &mem, const SceUID thread_id, ModuleData &data) {
-    Parameters *params = data.get_parameters<Parameters>(mem);
+    const Parameters *params = data.get_parameters<Parameters>(mem);
     State *state = data.get_state<State>();
 
     assert(state);
@@ -110,9 +127,9 @@ bool Module::process(KernelState &kern, const MemState &mem, const SceUID thread
         state->decoded_passed = 0;
 
         while (static_cast<std::int32_t>(state->decoded_samples_pending) < data.parent->rack->system->granularity) {
-            ngs::atrac9::BufferParameter &bufparam = params->buffer_params[state->current_buffer];
+            const ngs::atrac9::BufferParameters *bufparam = &params->buffer_params[state->current_buffer];
 
-            if ((state->current_buffer == -1) || (bufparam.bytes_count == 0)) {
+            if ((state->current_buffer == -1) || (bufparam->bytes_count == 0)) {
                 // Fill it then break
                 data.fill_to_fit_granularity();
                 finished = true;
@@ -124,10 +141,10 @@ bool Module::process(KernelState &kern, const MemState &mem, const SceUID thread
             // Ran out of data, supply new
             // Decode new data and deliver them
             // Let's open our context
-            if (bufparam.bytes_count > 0) {
-                auto *input = bufparam.buffer.cast<uint8_t>().get(mem) + state->current_byte_position_in_buffer;
+            if (bufparam->bytes_count > 0) {
+                auto *input = bufparam->buffer.cast<uint8_t>().get(mem) + state->current_byte_position_in_buffer;
 
-                std::uint32_t frame_bytes_gotten = bufparam.bytes_count - state->current_byte_position_in_buffer;
+                std::uint32_t frame_bytes_gotten = bufparam->bytes_count - state->current_byte_position_in_buffer;
                 state->current_byte_position_in_buffer += superframe_size;
 
                 std::vector<std::uint8_t> temporary_bytes;
@@ -141,14 +158,14 @@ bool Module::process(KernelState &kern, const MemState &mem, const SceUID thread
 
                         try_cycle_to_next_buffer();
 
-                        bufparam = params->buffer_params[state->current_buffer];
+                        bufparam = &params->buffer_params[state->current_buffer];
 
-                        if ((state->current_buffer == -1) || (bufparam.bytes_count == 0)) {
+                        if ((state->current_buffer == -1) || (bufparam->bytes_count == 0)) {
                             break;
                         }
 
-                        std::uint32_t bytes_to_get_next = std::min<std::uint32_t>(superframe_size - frame_bytes_gotten, bufparam.bytes_count);
-                        std::uint8_t *ptr_append = reinterpret_cast<std::uint8_t *>(bufparam.buffer.get(mem));
+                        std::uint32_t bytes_to_get_next = std::min<std::uint32_t>(superframe_size - frame_bytes_gotten, bufparam->bytes_count);
+                        std::uint8_t *ptr_append = reinterpret_cast<std::uint8_t *>(bufparam->buffer.get(mem));
 
                         temporary_bytes.insert(temporary_bytes.end(), ptr_append, ptr_append + bytes_to_get_next);
                         frame_bytes_gotten += bytes_to_get_next;

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,11 +17,12 @@
 
 #include <crypto/aes.h>
 #include <host/sce_types.h>
-
 #include <util/fs.h>
+#include <util/string_utils.h>
+
+#include <fmt/xchar.h>
 
 #include <fstream>
-#include <util/string_utils.h>
 
 // Credits to TeamMolecule for their original work on this https://github.com/TeamMolecule/sceutils
 

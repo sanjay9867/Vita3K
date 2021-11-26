@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,13 +19,4 @@
 
 #include <module/module.h>
 
-BRIDGE_DECL(sceFiosOverlayAddForProcess02)
-BRIDGE_DECL(sceFiosOverlayGetInfoForProcess02)
-BRIDGE_DECL(sceFiosOverlayGetList02)
-BRIDGE_DECL(sceFiosOverlayGetRecommendedScheduler02)
-BRIDGE_DECL(sceFiosOverlayModifyForProcess02)
-BRIDGE_DECL(sceFiosOverlayRemoveForProcess02)
-BRIDGE_DECL(sceFiosOverlayResolveSync02)
-BRIDGE_DECL(sceFiosOverlayResolveWithRangeSync02)
-BRIDGE_DECL(sceFiosOverlayThreadIsDisabled02)
-BRIDGE_DECL(sceFiosOverlayThreadSetDisabled02)
+BRIDGE_DECL(sceShellSvcGetSvcObj)

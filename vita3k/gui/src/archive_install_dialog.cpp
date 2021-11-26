@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2019 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -191,6 +191,7 @@ void draw_archive_install_dialog(GuiState &gui, HostState &host) {
                     if (delete_archive_file)
                         fs::remove(content.path);
                 }
+                save_apps_cache(gui, host);
                 archive_path = nullptr;
                 gui.file_menu.archive_install_dialog = false;
                 delete_archive_file = false;

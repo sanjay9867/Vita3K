@@ -42,10 +42,12 @@ add_library(
 	src/semaphores_dialog.cpp
 	src/settings.cpp
 	src/settings_dialog.cpp
+	src/themes.cpp
 	src/threads_dialog.cpp
 	src/trophy_collection.cpp
 	src/user_management.cpp
 	src/controls_dialog.cpp
+	src/controllers_dialog.cpp
 	src/allocations_dialog.cpp
 	src/disassembly_dialog.cpp
 	src/about_dialog.cpp

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -120,12 +120,7 @@ void KernelState::invalidate_jit_cache(Address start, size_t length) {
 }
 
 ThreadStatePtr KernelState::get_thread(SceUID thread_id) {
-    std::lock_guard<std::mutex> lock(mutex);
-    auto it = threads.find(thread_id);
-    if (it == threads.end()) {
-        return nullptr;
-    }
-    return it->second;
+    return lock_and_find(thread_id, threads, mutex);
 }
 
 ThreadStatePtr KernelState::create_thread(MemState &mem, const char *name) {

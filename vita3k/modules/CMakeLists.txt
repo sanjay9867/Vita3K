@@ -1,9 +1,7 @@
 set(SOURCE_LIST
 	module_parent.cpp include/modules/module_parent.h include/modules/library_init_list.inc
 
-	SceAVConfig/SceAVConfig.cpp SceAVConfig/SceAVConfig.h
 	SceAppMgr/SceAppMgr.cpp SceAppMgr/SceAppMgr.h
-	SceAppMgr/SceAppMgrUser.cpp SceAppMgr/SceAppMgrUser.h
 	SceAppMgr/SceSharedFb.cpp SceAppMgr/SceSharedFb.h
 	SceAppUtil/SceAppUtil.cpp SceAppUtil/SceAppUtil.h
 	SceAppUtil/SceAppUtilAddcontForce.cpp SceAppUtil/SceAppUtilAddcontForce.h
@@ -12,12 +10,13 @@ set(SOURCE_LIST
 	SceAppUtil/SceAppUtilExt.cpp SceAppUtil/SceAppUtilExt.h
 	SceAtrac/SceAtrac.cpp SceAtrac/SceAtrac.h
 	SceAudio/SceAudio.cpp SceAudio/SceAudio.h
-	SceAudioIn/SceAudioIn.cpp SceAudioIn/SceAudioIn.h
 	SceAudiodec/SceAudiodecUser.cpp SceAudiodec/SceAudiodecUser.h
 	SceAudioenc/SceAudioencUser.cpp SceAudioenc/SceAudioencUser.h
-	SceAvPlayer/SceAvPlayer.cpp SceAvPlayer/SceAvPlayer.h
+	SceAudioIn/SceAudioIn.cpp SceAudioIn/SceAudioIn.h
 	SceAvcodec/SceAvcodec.cpp SceAvcodec/SceAvcodec.h
 	SceAvcodecUser/SceVideoencUser.cpp SceAvcodecUser/SceVideoencUser.h
+	SceAVConfig/SceAVConfig.cpp SceAVConfig/SceAVConfig.h
+	SceAvPlayer/SceAvPlayer.cpp SceAvPlayer/SceAvPlayer.h
 	SceBbmc/SceBbmc.cpp SceBbmc/SceBbmc.h
 	SceBgAppUtil/SceBgAppUtil.cpp SceBgAppUtil/SceBgAppUtil.h
 	SceBt/SceBt.cpp SceBt/SceBt.h
@@ -32,17 +31,20 @@ set(SOURCE_LIST
 	SceCoredump/SceCoredump.cpp SceCoredump/SceCoredump.h
 	SceCoredump/SceCoredumpNounlink.cpp SceCoredump/SceCoredumpNounlink.h
 	SceCtrl/SceCtrl.cpp SceCtrl/SceCtrl.h
-	SceDTrace/SceDTrace.cpp SceDTrace/SceDTrace.h
-	SceDeci4p/SceDeci4pUserp.cpp SceDeci4p/SceDeci4pUserp.h
+	SceDeci4pUserp/SceDeci4pUserp.cpp SceDeci4pUserp/SceDeci4pUserp.h
 	SceDisplay/SceDisplay.cpp SceDisplay/SceDisplay.h
-	SceDisplay/SceDisplayUser.cpp SceDisplay/SceDisplayUser.h
+	SceDriverUser/SceAppMgrUser.cpp SceDriverUser/SceAppMgrUser.h
+	SceDriverUser/SceDisplayUser.cpp SceDriverUser/SceDisplayUser.h
 	SceDriverUser/SceDrmBridgeUser.cpp SceDriverUser/SceDrmBridgeUser.h
 	SceDriverUser/SceErrorUser.cpp SceDriverUser/SceErrorUser.h
+	SceDriverUser/SceFios2User.cpp SceDriverUser/SceFios2User.h
+	SceDriverUser/SceMotion.cpp SceDriverUser/SceMotion.h
+	SceDriverUser/SceRtcUser.cpp SceDriverUser/SceRtcUser.h
+	SceDTrace/SceDTrace.cpp SceDTrace/SceDTrace.h
 	SceError/SceError.cpp SceError/SceError.h
 	SceFace/SceFace.cpp SceFace/SceFace.h
 	SceFiber/SceFiber.cpp SceFiber/SceFiber.h
 	SceFios2/SceFios2.cpp SceFios2/SceFios2.h
-	SceFios2/SceFios2User.cpp SceFios2/SceFios2User.h
 	SceFios2Kernel/SceFios2Kernel.cpp SceFios2Kernel/SceFios2Kernel.h
 	SceFios2Kernel/SceFios2Kernel02.cpp SceFios2Kernel/SceFios2Kernel02.h
 	SceFios2Kernel/SceFios2KernelForDriver.cpp SceFios2Kernel/SceFios2KernelForDriver.h
@@ -71,8 +73,15 @@ set(SOURCE_LIST
 	SceKernelThreadMgr/SceThreadmgrCoredumpTime.cpp SceKernelThreadMgr/SceThreadmgrCoredumpTime.h
 	SceKernelThreadMgr/SceThreadmgrForDriver.cpp SceKernelThreadMgr/SceThreadmgrForDriver.h
 	SceKernelThreadMgr/SceThreadmgrForKernel.cpp SceKernelThreadMgr/SceThreadmgrForKernel.h
+	SceLibc/SceLibc.cpp SceLibc/SceLibc.h
+	SceLibc/SceLibm.cpp SceLibc/SceLibm.h
+	SceLibc/SceLibstdcxx.cpp SceLibc/SceLibstdcxx.h
 	SceLibDbg/SceDbg.cpp SceLibDbg/SceDbg.h
+	SceLibft2/SceFt2.cpp SceLibft2/SceFt2.h
 	SceLibJson/SceLibJson.cpp SceLibJson/SceLibJson.h
+	SceLibKernel/SceKernelForMono.cpp SceLibKernel/SceKernelForMono.h
+	SceLibKernel/SceKernelForVM.cpp SceLibKernel/SceKernelForVM.h
+	SceLibKernel/SceLibGcc.cpp SceLibKernel/SceLibGcc.h
 	SceLibKernel/SceLibKernel.cpp SceLibKernel/SceLibKernel.h
 	SceLibKernel/SceLibRng.cpp SceLibKernel/SceLibRng.h
 	SceLibKernel/SceLibSsp.cpp SceLibKernel/SceLibSsp.h
@@ -81,15 +90,12 @@ set(SOURCE_LIST
 	SceLibMp4Recorder/SceLibMp4Recorder.cpp SceLibMp4Recorder/SceLibMp4Recorder.h
 	SceLibMtp/SceLibMtp.cpp SceLibMtp/SceLibMtp.h
 	SceLibXml/SceLibXml.cpp SceLibXml/SceLibXml.h
-	SceLibc/SceLibc.cpp SceLibc/SceLibc.h
-	SceLibc/SceLibm.cpp SceLibc/SceLibm.h
-	SceLibc/SceLibstdcxx.cpp SceLibc/SceLibstdcxx.h
 	SceLiveArea/SceLiveAreaUtil.cpp SceLiveArea/SceLiveAreaUtil.h
 	SceLocation/SceLibLocation.cpp SceLocation/SceLibLocation.h
 	SceLocationExtension/SceLibLocationExtension.cpp SceLocationExtension/SceLibLocationExtension.h
 	SceLsdb/SceLsdb.cpp SceLsdb/SceLsdb.h
-	SceMotion/SceMotion.cpp SceMotion/SceMotion.h
 	SceMotionDev/SceMotionDev.cpp SceMotionDev/SceMotionDev.h
+	SceMp4/SceMp4.cpp SceMp4/SceMp4.h
 	SceMtpIfDriver/SceMtpIf.cpp SceMtpIfDriver/SceMtpIf.h
 	SceMusicExport/SceMusicExport.cpp SceMusicExport/SceMusicExport.h
 	SceNearDialogUtil/SceNearDialogUtil.cpp SceNearDialogUtil/SceNearDialogUtil.h
@@ -142,7 +148,7 @@ set(SOURCE_LIST
 	SceRegistryMgr/SceRegMgrForSDK.cpp SceRegistryMgr/SceRegMgrForSDK.h
 	SceRegistryMgr/SceRegMgrService.cpp SceRegistryMgr/SceRegMgrService.h
 	SceRtc/SceRtc.cpp SceRtc/SceRtc.h
-	SceRtc/SceRtcUser.cpp SceRtc/SceRtcUser.h
+	SceRtc/SceRtcForDriver.cpp SceRtc/SceRtcForDriver.h
 	SceRudp/SceLibRudp.cpp SceRudp/SceLibRudp.h
 	SceSas/SceSas.cpp SceSas/SceSas.h
 	SceSblACMgr/SceSblACMgr.cpp SceSblACMgr/SceSblACMgr.h
@@ -158,12 +164,14 @@ set(SOURCE_LIST
 	SceSblUpdateMgr/SceSblSsUpdateMgr.cpp SceSblUpdateMgr/SceSblSsUpdateMgr.h
 	SceScreenShot/SceScreenShot.cpp SceScreenShot/SceScreenShot.h
 	SceShaccCg/SceShaccCg.cpp SceShaccCg/SceShaccCg.h
+	SceShellSvc/SceShellSvc.cpp SceShellSvc/SceShellSvc.h
 	SceShellSvc/SceShellUtil.cpp SceShellSvc/SceShellUtil.h
 	SceShellSvc/SceShellUtilLaunchApp.cpp SceShellSvc/SceShellUtilLaunchApp.h
 	SceShutterSound/SceShutterSound.cpp SceShutterSound/SceShutterSound.h
 	SceSmart/SceSmart.cpp SceSmart/SceSmart.h
 	SceSqlite/SceSqlite.cpp SceSqlite/SceSqlite.h
 	SceSsl/SceSsl.cpp SceSsl/SceSsl.h
+	SceSsl/SceSslInternal.cpp SceSsl/SceSslInternal.h
 	SceStdio/SceStdio.cpp SceStdio/SceStdio.h
 	SceSulpha/SceSulpha.cpp SceSulpha/SceSulpha.h
 	SceSysmem/SceCpu.cpp SceSysmem/SceCpu.h
@@ -185,13 +193,13 @@ set(SOURCE_LIST
 	SceUdcd/SceUdcd.cpp SceUdcd/SceUdcd.h
 	SceUlobjMgr/SceUlobjMgr.cpp SceUlobjMgr/SceUlobjMgr.h
 	SceUlt/SceUlt.cpp SceUlt/SceUlt.h
+	SceUsbd/SceUsbdForUser.cpp SceUsbd/SceUsbdForUser.h
 	SceUsbPspcm/SceUsbPspcm.cpp SceUsbPspcm/SceUsbPspcm.h
 	SceUsbSerial/SceUsbSerial.cpp SceUsbSerial/SceUsbSerial.h
 	SceUsbServ/SceUsbServ.cpp SceUsbServ/SceUsbServ.h
-	SceUsbd/SceUsbdForUser.cpp SceUsbd/SceUsbdForUser.h
 	SceUsbstorVStorDriver/SceUsbstorVStor.cpp SceUsbstorVStorDriver/SceUsbstorVStor.h
-	SceVideoExport/SceVideoExport.cpp SceVideoExport/SceVideoExport.h
 	SceVideodec/SceVideodecUser.cpp SceVideodec/SceVideodecUser.h
+	SceVideoExport/SceVideoExport.cpp SceVideoExport/SceVideoExport.h
 	SceVoice/SceVoice.cpp SceVoice/SceVoice.h
 	SceVoiceQoS/SceVoiceQoS.cpp SceVoiceQoS/SceVoiceQoS.h
 	SceVshBridge/SceDrmBridge.cpp SceVshBridge/SceDrmBridge.h
@@ -199,9 +207,7 @@ set(SOURCE_LIST
 	SceWlanBt/SceWlan.cpp SceWlanBt/SceWlan.h
 )
 
-add_library(modules STATIC
-	${SOURCE_LIST}	
-)
+add_library(modules STATIC ${SOURCE_LIST})
 target_include_directories(modules PUBLIC include)
 target_link_libraries(modules PRIVATE xxHash::xxhash)
 target_link_libraries(modules PUBLIC module)

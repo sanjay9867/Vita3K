@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #pragma once
 #include <mem/ptr.h>
 #include <util/types.h>
@@ -32,6 +49,8 @@
 #define SCE_KERNEL_LW_MUTEX_ATTR_TH_PRIO SCE_KERNEL_ATTR_TH_PRIO
 
 #define KERNELOBJECT_MAX_NAME_LENGTH 31
+
+#define SCE_UID_INVALID_UID (SceUID)(0xFFFFFFFF)
 
 #define SCE_ERROR_ERRNO_EINVAL 0x80010016
 
@@ -509,6 +528,13 @@ struct SceKernelModuleInfo {
     SceUInt state; //!< see:SceKernelModuleState
 };
 
+struct SceKernelStartModuleOpt {
+    SceSize size;
+    SceUInt32 flags;
+    SceUInt32 prologue;
+    SceUInt32 start;
+};
+
 static_assert(sizeof(SceKernelModuleInfo) == 0x1B8);
 
 struct SceKernelMemBlockInfo {
@@ -525,6 +551,10 @@ struct SceKernelSimpleEventOptParam {
 };
 
 struct SceKernelEventFlagOptParam {
+    SceSize size;
+};
+
+struct SceKernelCondOptParam {
     SceSize size;
 };
 
@@ -624,6 +654,36 @@ struct SceKernelMsgPipeInfo {
     uint32_t numReceivers;
 };
 
+struct SceKernelCondInfo {
+    SceSize size;
+    SceUID condId;
+    char name[KERNELOBJECT_MAX_NAME_LENGTH + 1];
+    SceUInt32 attr;
+    SceUID mutexId;
+    SceUInt32 numWaitThreads;
+};
+
+struct SceKernelEventFlagInfo {
+    SceSize size;
+    SceUID evfId;
+    char name[KERNELOBJECT_MAX_NAME_LENGTH + 1];
+    SceUInt32 attr;
+    SceUInt32 initPattern;
+    SceUInt32 currentPattern;
+    SceUInt32 numWaitThreads;
+};
+
+struct SceKernelSemaInfo {
+    SceSize size;
+    SceUID semaId;
+    char name[KERNELOBJECT_MAX_NAME_LENGTH + 1];
+    SceUInt32 attr;
+    SceInt32 initCount;
+    SceInt32 currentCount;
+    SceInt32 maxCount;
+    SceUInt32 numWaitThreads;
+};
+
 struct SceKernelThreadInfo {
     /** Size of the structure */
     SceSize size;
@@ -675,6 +735,22 @@ struct SceKernelThreadInfo {
     SceInt32 reserved;
 };
 
+struct SceKernelThreadCpuRegisterInfo {
+    SceSize size;
+    SceUInt32 cpsr;
+    SceUInt32 reg[16];
+    SceUInt32 tpidrurw;
+    SceUInt32 teehbr;
+    SceUInt32 sb;
+    SceUInt32 st;
+};
+
+struct SceKernelThreadVfpRegisterInfo {
+    SceSize size;
+    SceUInt32 fpscr;
+    SceFloat reg[64];
+};
+
 struct SceProcessParam {
     SceSize size;
     SceUInt32 magic;
@@ -704,4 +780,19 @@ struct SceKernelCreateThread_opt {
     SceUInt attr;
     int cpu_affinity_mask;
     Ptr<SceKernelThreadOptParam> option;
+};
+
+typedef SceInt32(SceKernelCallbackFunction)(SceUID notifyId, SceInt32 notifyCount, SceInt32 notifyArg, void *pCommon);
+
+struct SceKernelCallbackInfo {
+    SceSize size;
+    SceUID callbackId;
+    char name[KERNELOBJECT_MAX_NAME_LENGTH + 1];
+    SceUInt32 attr;
+    SceUID threadId;
+    SceKernelCallbackFunction *callbackFunc;
+    SceUID notifyId;
+    SceInt32 notifyCount;
+    SceInt32 notifyArg;
+    void *pCommon;
 };

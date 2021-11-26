@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2020 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -61,6 +61,7 @@ void draw_allocations_dialog(GuiState &gui, HostState &host);
 void draw_disassembly_dialog(GuiState &gui, HostState &host);
 void draw_settings_dialog(GuiState &gui, HostState &host);
 void draw_controls_dialog(GuiState &gui, HostState &host);
+void draw_controllers_dialog(GuiState &gui, HostState &host);
 void draw_about_dialog(GuiState &gui, HostState &host);
 void draw_welcome_dialog(GuiState &gui, HostState &host);
 

@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <renderer/functions.h>
 #include <renderer/profile.h>
 
@@ -78,16 +95,6 @@ void draw(GLState &renderer, GLContext &context, const FeatureState &features, S
         // Use it
         program_id = (*program).get();
         context.last_draw_program = program_id;
-
-        // Gather what textures to bind
-        context.texture_bind_list = 0;
-
-        const auto frag_params = gxp::program_parameters(fragment_program_gxp);
-        for (std::uint32_t i = 0; i < fragment_program_gxp.parameter_count; i++) {
-            if (frag_params[i].category == SCE_GXM_PARAMETER_CATEGORY_SAMPLER) {
-                context.texture_bind_list |= (1 << frag_params[i].resource_index);
-            }
-        }
     } else {
         program_id = context.last_draw_program;
     }
@@ -113,21 +120,20 @@ void draw(GLState &renderer, GLContext &context, const FeatureState &features, S
     }
     glBindImageTexture(shader::MASK_TEXTURE_SLOT_IMAGE, context.render_target->masktexture[0], 0, GL_FALSE, 0, GL_READ_ONLY, GL_RGBA8);
 
-    for (std::uint32_t i = 0; i < SCE_GXM_MAX_TEXTURE_UNITS; i++) {
-        if (context.texture_bind_list & (1 << i)) {
-            gl::sync_texture(context, mem, i, context.record.fragment_textures[i], config, base_path, title_id);
-        }
-    }
-
     GXMRenderVertUniformBlock vert_ublock;
     std::memcpy(vert_ublock.viewport_flip, context.viewport_flip, sizeof(context.viewport_flip));
     vert_ublock.viewport_flag = (context.record.viewport_flat) ? 0.0f : 1.0f;
     vert_ublock.screen_width = static_cast<float>(context.record.color_surface.width);
     vert_ublock.screen_height = static_cast<float>(context.record.color_surface.height);
-    set_uniform_buffer(context, true, SCE_GXM_REAL_MAX_UNIFORM_BUFFER, sizeof(GXMRenderVertUniformBlock), &vert_ublock, false);
+
+    glBindBuffer(GL_UNIFORM_BUFFER, context.uniform_buffer[0]);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(GXMRenderVertUniformBlock), nullptr, GL_DYNAMIC_DRAW);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(GXMRenderVertUniformBlock), &vert_ublock, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 2, context.uniform_buffer[0]);
 
     GXMRenderFragUniformBlock frag_ublock;
-    const bool both_side_fragment_program_disabled = context.record.front_side_fragment_program_mode && (context.record.front_side_fragment_program_mode || context.record.back_side_fragment_program_mode);
+    const bool both_side_fragment_program_disabled = (context.record.front_side_fragment_program_mode == SCE_GXM_FRAGMENT_PROGRAM_DISABLED)
+        && ((context.record.back_side_fragment_program_mode == SCE_GXM_FRAGMENT_PROGRAM_DISABLED) || (context.record.two_sided == SCE_GXM_TWO_SIDED_DISABLED));
     if (both_side_fragment_program_disabled) {
         frag_ublock.front_disabled = 0.0f;
         frag_ublock.back_disabled = 0.0f;
@@ -149,7 +155,10 @@ void draw(GLState &renderer, GLContext &context, const FeatureState &features, S
     }
     frag_ublock.writing_mask = context.record.writing_mask;
 
-    set_uniform_buffer(context, false, SCE_GXM_REAL_MAX_UNIFORM_BUFFER, sizeof(GXMRenderFragUniformBlock), &frag_ublock, false);
+    glBindBuffer(GL_UNIFORM_BUFFER, context.uniform_buffer[1]);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(GXMRenderFragUniformBlock), nullptr, GL_DYNAMIC_DRAW);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(GXMRenderFragUniformBlock), &frag_ublock, GL_DYNAMIC_DRAW);
+    glBindBufferBase(GL_UNIFORM_BUFFER, 3, context.uniform_buffer[1]);
 
     context.vertex_set_requests.clear();
     context.fragment_set_requests.clear();
@@ -165,11 +174,11 @@ void draw(GLState &renderer, GLContext &context, const FeatureState &features, S
     delete[] indices_u8;
 
     if (fragment_program_gxp.is_native_color()) {
-        if (features.should_use_texture_barrier()) {
+        if (features.should_use_shader_interlock() && !config.spirv_shader) {
+            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
+        } else if (features.should_use_texture_barrier()) {
             // Needs texture barrier
             glTextureBarrier();
-        } else if (features.should_use_shader_interlock()) {
-            glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_TEXTURE_FETCH_BARRIER_BIT);
         }
     }
 

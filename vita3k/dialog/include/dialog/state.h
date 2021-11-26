@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -30,12 +30,12 @@ enum DialogType {
 };
 
 struct ImeState {
-    std::string title;
+    char title[SCE_IME_DIALOG_MAX_TITLE_LENGTH];
     uint32_t max_length;
     bool multiline;
     bool cancelable;
     uint16_t *result;
-    char text[256];
+    char text[SCE_IME_DIALOG_MAX_TEXT_LENGTH];
     uint32_t status;
 };
 

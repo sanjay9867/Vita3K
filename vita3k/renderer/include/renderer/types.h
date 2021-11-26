@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #pragma once
 
 #include <crypto/hash.h>
@@ -51,7 +68,7 @@ enum class GXMState : std::uint16_t {
     PolygonMode = 6,
     PointLineWidth = 7,
     StencilFunc = 8,
-    FragmentTexture = 9,
+    Texture = 9,
     StencilRef = 10,
     VertexStream = 11,
     TwoSided = 12,
@@ -77,8 +94,6 @@ struct GxmRecordState {
 
     SceGxmColorSurface color_surface;
     SceGxmDepthStencilSurface depth_stencil_surface;
-
-    SceGxmTexture fragment_textures[SCE_GXM_MAX_TEXTURE_UNITS];
 
     SceGxmCullMode cull_mode = SCE_GXM_CULL_NONE;
     SceGxmTwoSidedMode two_sided = SCE_GXM_TWO_SIDED_DISABLED;
@@ -118,12 +133,13 @@ struct Context {
     std::string last_draw_fragment_program_hash;
     std::string last_draw_vertex_program_hash;
 
-    std::uint8_t texture_bind_list = 0;
+    virtual ~Context() = default;
 };
 
 struct ShaderProgram {
     std::string hash;
-    UniformBufferSizes uniform_buffer_sizes;
+    UniformBufferSizes uniform_buffer_sizes; // Size of the buffer in 4-bytes unit
+    UniformBufferSizes uniform_buffer_data_offsets; // Offset of the buffer in 4-bytes unit
 };
 
 struct FragmentProgram : ShaderProgram {
@@ -134,6 +150,7 @@ struct VertexProgram : ShaderProgram {
 
 struct RenderTarget {
     int holder;
+    virtual ~RenderTarget() = default;
 };
 
 } // namespace renderer

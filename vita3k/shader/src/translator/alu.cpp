@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2019 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -1467,6 +1467,8 @@ bool USSETranslatorVisitor::vdual(
     }
 
     unified_dest = decode_dest(unified_dest, prim_dest_num, prim_dest_bank, false, unified_is_vector, unified_is_vector ? 8 : 7, m_second_program);
+    unified_dest.type = (type_f16 ? DataType::F16 : DataType::F32);
+
     internal_dest.bank = RegisterBank::FPINTERNAL;
     internal_dest.num = prim_dest_num_gpi_case;
     internal_dest.swizzle = SWIZZLE_CHANNEL_4_DEFAULT;

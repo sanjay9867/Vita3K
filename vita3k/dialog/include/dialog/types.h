@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -134,6 +134,9 @@ enum SceCommonDialogErrorCode {
     SCE_COMMON_DIALOG_ERROR_GXM_IS_UNINITIALIZED = 0x80020436,
     SCE_COMMON_DIALOG_ERROR_UNEXPECTED_FATAL = 0x8002047F
 };
+
+#define SCE_IME_DIALOG_MAX_TITLE_LENGTH 128
+#define SCE_IME_DIALOG_MAX_TEXT_LENGTH 2048
 
 enum SceImeDialogButton {
     SCE_IME_DIALOG_BUTTON_NONE = 0,

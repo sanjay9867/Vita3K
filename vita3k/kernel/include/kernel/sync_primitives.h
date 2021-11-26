@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -75,12 +75,16 @@ struct SyncPrimitive {
     std::mutex mutex;
 
     char name[KERNELOBJECT_MAX_NAME_LENGTH + 1];
+
+    virtual ~SyncPrimitive() = default;
 };
 
 struct Semaphore : SyncPrimitive {
     WaitingThreadQueuePtr waiting_threads;
     int max;
     int val;
+
+    ~Semaphore() override = default;
 };
 
 typedef std::shared_ptr<Semaphore> SemaphorePtr;
@@ -92,6 +96,8 @@ struct Mutex : SyncPrimitive {
     ThreadStatePtr owner;
     WaitingThreadQueuePtr waiting_threads;
     Ptr<SceKernelLwMutexWork> workarea;
+
+    ~Mutex() override = default;
 };
 
 typedef std::shared_ptr<Mutex> MutexPtr;
@@ -100,6 +106,8 @@ typedef std::map<SceUID, MutexPtr> MutexPtrs;
 struct EventFlag : SyncPrimitive {
     WaitingThreadQueuePtr waiting_threads;
     int flags;
+
+    ~EventFlag() override = default;
 };
 
 typedef std::shared_ptr<EventFlag> EventFlagPtr;
@@ -125,6 +133,8 @@ struct Condvar : SyncPrimitive {
 
     WaitingThreadQueuePtr waiting_threads;
     MutexPtr associated_mutex;
+
+    ~Condvar() override = default;
 };
 typedef std::shared_ptr<Condvar> CondvarPtr;
 typedef std::map<SceUID, CondvarPtr> CondvarPtrs;
@@ -143,6 +153,8 @@ struct MsgPipe : SyncPrimitive {
     WaitingThreadQueuePtr sender_threads;
     WaitingThreadQueuePtr reciever_threads;
     std::list<MsgPipeData> data_buffer;
+
+    ~MsgPipe() override = default;
 };
 
 typedef std::shared_ptr<MsgPipe> MsgPipePtr;

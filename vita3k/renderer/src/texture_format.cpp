@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 // Copyright (c) 2009 Benjamin Dobell, Glass Echidna
 //
 // This program is free software; you can redistribute it and/or modify
@@ -20,6 +20,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include <gxm/functions.h>
 #include <gxm/types.h>
 
 namespace renderer::texture {
@@ -99,6 +100,17 @@ size_t bits_per_pixel(SceGxmTextureBaseFormat base_format) {
     return 0;
 }
 
+size_t texture_size(const SceGxmTexture &texture) {
+    const SceGxmTextureFormat format = gxm::get_format(&texture);
+    const SceGxmTextureBaseFormat base_format = gxm::get_base_format(format);
+    const size_t width = gxm::get_width(&texture);
+    const size_t height = gxm::get_height(&texture);
+    const size_t stride = (width + 7) & ~7; // NOTE: This is correct only with linear textures.
+    const size_t bpp = bits_per_pixel(base_format);
+    const size_t size = (bpp * stride * height) / 8;
+    return size;
+}
+
 // Based on this: http://xen.firefly.nu/up/rearrange.c.html
 // Thanks daniel from GXTConvert finding this out first
 
@@ -163,18 +175,19 @@ void tiled_texture_to_linear_texture(uint8_t *dest, const uint8_t *src, uint16_t
         return;
     }
 
-    const uint16_t width_in_tiles = (width + 31) >> 5;
+    const uint32_t bpp = bits_per_pixel >> 3;
+    const uint32_t width_in_tiles = (width + 31) >> 5;
 
     for (uint16_t y = 0; y < height; y++) {
         for (uint16_t x = 0; x < width; x++) {
-            // Calculate texel address in title
-            const uint16_t texel_offset_in_title = (x & 0b11111) | ((y & 0b11111) << 4);
-            const uint16_t tile_address = (x & 0b111111100000) + width_in_tiles * (y & 0b111111100000);
+            // Calculate texel address in tile
+            const uint32_t texel_offset_in_tile = (x & 0b11111) | ((y & 0b11111) << 5);
+            const uint32_t tile_address = (x >> 5) + width_in_tiles * (y >> 5);
 
-            uint32_t offset = ((tile_address << 9) | (texel_offset_in_title)) * (bits_per_pixel >> 3);
+            const uint32_t offset = ((tile_address << 10) | (texel_offset_in_tile)) * bpp;
 
             // Make scanline
-            memcpy(dest + ((y * width) + x) * (bits_per_pixel >> 3), src + offset, bits_per_pixel >> 3);
+            memcpy(dest + ((y * width) + x) * bpp, src + offset, bpp);
         }
     }
 }
@@ -224,7 +237,7 @@ static std::uint32_t pack_rgba_reversed(std::uint8_t r, std::uint8_t g, std::uin
  * \param alpha_table       alpha lookup table.
  **/
 static void decompress_block_dxt1_shared(std::uint32_t x, std::uint32_t y, std::uint32_t width, const std::uint8_t *block_storage, std::uint32_t *image,
-    const std::uint8_t *alpha_table) {
+    const std::uint8_t *alpha_table, const bool transparent_on_black) {
     std::uint16_t color0 = *reinterpret_cast<const std::uint16_t *>(block_storage);
     std::uint16_t color1 = *reinterpret_cast<const std::uint16_t *>(block_storage + 2);
 
@@ -282,7 +295,7 @@ static void decompress_block_dxt1_shared(std::uint32_t x, std::uint32_t y, std::
                     final_color = pack_rgba_reversed((r0 + r1) / 2, (g0 + g1) / 2, (b0 + b1) / 2, alpha);
                     break;
                 case 3:
-                    final_color = pack_rgba_reversed(0, 0, 0, alpha);
+                    final_color = pack_rgba_reversed(0, 0, 0, transparent_on_black ? 0 : alpha);
                     break;
                 default:
                     final_color = 0xFFFFFFFF;
@@ -303,7 +316,7 @@ static void decompress_block_dxt1(std::uint32_t x, std::uint32_t y, std::uint32_
         255, 255, 255, 255
     };
 
-    decompress_block_dxt1_shared(x, y, width, block_storage, image, alpha_table);
+    decompress_block_dxt1_shared(x, y, width, block_storage, image, alpha_table, true);
 }
 
 /**
@@ -330,7 +343,7 @@ static void decompress_block_dxt3(std::uint32_t x, std::uint32_t y, std::uint32_
         block_storage += 2;
     }
 
-    decompress_block_dxt1_shared(x, y, width, block_storage, image, alpha_table);
+    decompress_block_dxt1_shared(x, y, width, block_storage, image, alpha_table, false);
 }
 
 /**

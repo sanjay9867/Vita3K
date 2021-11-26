@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <chrono>
 #include <gxm/types.h>
 #include <renderer/commands.h>
@@ -27,26 +44,27 @@ COMMAND(handle_notification) {
     [[maybe_unused]] const bool is_vertex = helper.pop<bool>();
 
     volatile std::uint32_t *val = nof->address.get(mem);
-    *val = nof->value;
+    if (val) // Ratchet and clank Trilogy request this
+        *val = nof->value;
 }
 
 // Client side function
 void finish(State &state, Context &context) {
     // Wait for the code
-    wait_for_status(state, &context.render_finish_status);
+    wait_for_status(state, &context.render_finish_status, state.last_scene_id, true);
 }
 
-int wait_for_status(State &state, int *result_code) {
-    if (*result_code != CommandErrorCodePending) {
+int wait_for_status(State &state, int *status, int signal, bool wake_on_equal) {
+    std::unique_lock<std::mutex> lock(state.command_finish_one_mutex);
+    const bool wake_on_unequal = !wake_on_equal;
+    if ((*status == signal) ^ wake_on_unequal) {
         // Signaled, return
-        return *result_code;
+        return *status;
     }
 
     // Wait for it to get signaled
-    std::unique_lock<std::mutex> finish_mutex(state.command_finish_one_mutex);
-    state.command_finish_one.wait(finish_mutex, [&]() { return *result_code != CommandErrorCodePending; });
-
-    return *result_code;
+    state.command_finish_one.wait(lock, [&]() { return (*status == signal) ^ wake_on_unequal; });
+    return *status;
 }
 
 void wishlist(SceGxmSyncObject *sync_object, const SyncObjectSubject subjects) {

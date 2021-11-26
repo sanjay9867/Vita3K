@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -32,5 +32,10 @@ BRIDGE_DECL(sceNpAuthTerm)
 BRIDGE_DECL(sceNpCmpNpId)
 BRIDGE_DECL(sceNpCmpNpIdInOrder)
 BRIDGE_DECL(sceNpCmpOnlineId)
+BRIDGE_DECL(sceNpCommonBase64Encode)
+BRIDGE_DECL(sceNpCommonFreeNpServerName)
+BRIDGE_DECL(sceNpCommonGetNpEnviroment)
+BRIDGE_DECL(sceNpCommonGetSystemSwVersion)
+BRIDGE_DECL(sceNpCommonMallocNpServerName)
 BRIDGE_DECL(sceNpGetPlatformType)
 BRIDGE_DECL(sceNpSetPlatformType)

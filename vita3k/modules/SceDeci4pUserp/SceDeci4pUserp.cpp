@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,55 +15,55 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#include "SceFios2User.h"
+#include "SceDeci4pUserp.h"
 
-EXPORT(int, sceFiosOverlayAddForProcess02) {
+EXPORT(int, sceKernelDeci4pClose) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceFiosOverlayGetInfoForProcess02) {
+EXPORT(int, sceKernelDeci4pCreateHostProcess) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceFiosOverlayGetList02) {
+EXPORT(int, sceKernelDeci4pCreateHostProcessAndWait) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceFiosOverlayGetRecommendedScheduler02) {
+EXPORT(int, sceKernelDeci4pDisableWatchpoint) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceFiosOverlayModifyForProcess02) {
+EXPORT(int, sceKernelDeci4pEnableWatchpoint) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceFiosOverlayRemoveForProcess02) {
+EXPORT(int, sceKernelDeci4pIsProcessAttached) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceFiosOverlayResolveSync02) {
+EXPORT(int, sceKernelDeci4pOpen) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceFiosOverlayResolveWithRangeSync02) {
+EXPORT(int, sceKernelDeci4pRead) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceFiosOverlayThreadIsDisabled02) {
+EXPORT(int, sceKernelDeci4pRegisterCallback) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceFiosOverlayThreadSetDisabled02) {
+EXPORT(int, sceKernelDeci4pWrite) {
     return UNIMPLEMENTED();
 }
 
-BRIDGE_IMPL(sceFiosOverlayAddForProcess02)
-BRIDGE_IMPL(sceFiosOverlayGetInfoForProcess02)
-BRIDGE_IMPL(sceFiosOverlayGetList02)
-BRIDGE_IMPL(sceFiosOverlayGetRecommendedScheduler02)
-BRIDGE_IMPL(sceFiosOverlayModifyForProcess02)
-BRIDGE_IMPL(sceFiosOverlayRemoveForProcess02)
-BRIDGE_IMPL(sceFiosOverlayResolveSync02)
-BRIDGE_IMPL(sceFiosOverlayResolveWithRangeSync02)
-BRIDGE_IMPL(sceFiosOverlayThreadIsDisabled02)
-BRIDGE_IMPL(sceFiosOverlayThreadSetDisabled02)
+BRIDGE_IMPL(sceKernelDeci4pClose)
+BRIDGE_IMPL(sceKernelDeci4pCreateHostProcess)
+BRIDGE_IMPL(sceKernelDeci4pCreateHostProcessAndWait)
+BRIDGE_IMPL(sceKernelDeci4pDisableWatchpoint)
+BRIDGE_IMPL(sceKernelDeci4pEnableWatchpoint)
+BRIDGE_IMPL(sceKernelDeci4pIsProcessAttached)
+BRIDGE_IMPL(sceKernelDeci4pOpen)
+BRIDGE_IMPL(sceKernelDeci4pRead)
+BRIDGE_IMPL(sceKernelDeci4pRegisterCallback)
+BRIDGE_IMPL(sceKernelDeci4pWrite)

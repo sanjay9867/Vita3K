@@ -153,8 +153,10 @@ void draw_pkg_install_dialog(GuiState &gui, HostState &host) {
                     fs::remove(fs::path(string_utils::utf_to_wide(std::string(work_path))));
                     delete_work_file = false;
                 }
-                if (host.app_category == "gd")
+                if (host.app_category == "gd") {
                     init_user_app(gui, host, host.app_title_id);
+                    save_apps_cache(gui, host);
+                }
                 update_notice_info(gui, host, "content");
                 pkg_path = nullptr;
                 work_path = nullptr;
@@ -168,7 +170,6 @@ void draw_pkg_install_dialog(GuiState &gui, HostState &host) {
             ImGui::TextColored(GUI_COLOR_TEXT, "Please check log for more details.");
             ImGui::SetCursorPos(ImVec2(POS_BUTTON, ImGui::GetWindowSize().y - BUTTON_SIZE.y - (20.f * SCALE.y)));
             if (ImGui::Button("OK", BUTTON_SIZE)) {
-                refresh_app_list(gui, host);
                 gui.file_menu.pkg_install_dialog = false;
                 pkg_path = nullptr;
                 draw_file_dialog = true;

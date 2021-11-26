@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #pragma once
 
 #include <fmt/format.h>
@@ -28,14 +45,14 @@ struct CPUProtocolBase {
     virtual void call_svc(CPUState &cpu, uint32_t svc, Address pc, SceUID thread_id) = 0;
     virtual Address get_watch_memory_addr(Address addr) = 0;
     virtual ExclusiveMonitorPtr get_exlusive_monitor() = 0;
-    virtual ~CPUProtocolBase() {}
+    virtual ~CPUProtocolBase() = default;
 };
 
 struct CPUContext {
     CPUContext() = default;
 
     std::array<uint32_t, 16> cpu_registers{};
-    std::array<uint32_t, 64> fpu_registers{};
+    std::array<float, 64> fpu_registers{};
     uint32_t cpsr = 0;
     uint32_t fpscr = 0;
 

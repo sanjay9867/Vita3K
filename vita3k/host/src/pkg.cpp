@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2020 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -80,7 +80,8 @@ bool decrypt_install_nonpdrm(HostState &host, std::string &drmlicpath, const std
     if ((execute(zRIF, title_id_src, title_id_dst, f00d_enc_type, f00d_arg) < 0) && (title_path.find("theme") == std::string::npos))
         return false;
 
-    copy_license(host, drmlicpath);
+    if (host.app_category.find("gp") == std::string::npos)
+        copy_license(host, drmlicpath);
 
     fs::remove_all(fs::path(title_id_src));
     fs::rename(fs::path(title_id_dst), fs::path(title_id_src));

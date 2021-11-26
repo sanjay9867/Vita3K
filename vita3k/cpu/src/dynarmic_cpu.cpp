@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <cpu/disasm/functions.h>
 #include <cpu/impl/dynarmic_cpu.h>
 #include <cpu/impl/interface.h>
@@ -19,7 +36,7 @@ public:
         : tpidruro(0) {
     }
 
-    ~ArmDynarmicCP15() {}
+    ~ArmDynarmicCP15() override = default;
 
     std::optional<Callback> CompileInternalOperation(bool two, unsigned opc1, CoprocReg CRd,
         CoprocReg CRn, CoprocReg CRm,
@@ -79,7 +96,7 @@ public:
         : parent(&parent)
         , cpu(&cpu) {}
 
-    ~ArmDynarmicCallback() {}
+    ~ArmDynarmicCallback() override = default;
 
     uint32_t MemoryReadCode(Dynarmic::A32::VAddr addr) override {
         if (cpu->log_mem)
@@ -391,7 +408,8 @@ CPUContext DynarmicCPU::save_context() {
     CPUContext ctx;
     const auto dctx = jit->SaveContext();
     ctx.cpu_registers = dctx.Regs();
-    ctx.fpu_registers = dctx.ExtRegs();
+    static_assert(sizeof(ctx.fpu_registers) == sizeof(dctx.ExtRegs()));
+    memcpy(ctx.fpu_registers.data(), dctx.ExtRegs().data(), sizeof(ctx.fpu_registers));
     ctx.fpscr = dctx.Fpscr();
     ctx.cpsr = dctx.Cpsr();
 
@@ -401,7 +419,8 @@ CPUContext DynarmicCPU::save_context() {
 void DynarmicCPU::load_context(CPUContext ctx) {
     Dynarmic::A32::Context dctx;
     dctx.Regs() = ctx.cpu_registers;
-    dctx.ExtRegs() = ctx.fpu_registers;
+    static_assert(sizeof(ctx.fpu_registers) == sizeof(dctx.ExtRegs()));
+    memcpy(dctx.ExtRegs().data(), ctx.fpu_registers.data(), sizeof(ctx.fpu_registers));
     dctx.SetCpsr(ctx.cpsr);
     dctx.SetFpscr(ctx.fpscr);
     jit->LoadContext(dctx);

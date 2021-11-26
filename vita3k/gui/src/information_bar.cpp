@@ -36,7 +36,7 @@ struct NoticeInfo {
     std::string content_id;
     std::string group;
     std::string type;
-    time_t date;
+    time_t time;
     std::string name;
     std::string msg;
 };
@@ -46,7 +46,7 @@ struct NoticeList {
     std::string content_id;
     std::string group;
     std::string type;
-    time_t date;
+    time_t time;
 };
 
 static std::map<std::string, std::vector<NoticeList>> notice_list;
@@ -57,7 +57,7 @@ static int notice_info_count_new = 0;
 static std::vector<NoticeInfo> notice_info;
 
 static bool init_notice_icon(GuiState &gui, HostState &host, const fs::path &content_path, const NoticeList &info) {
-    gui.notice_info_icon[info.date] = {};
+    gui.notice_info_icon[info.time] = {};
     int32_t width = 0;
     int32_t height = 0;
     vfs::FileBuffer buffer;
@@ -67,15 +67,8 @@ static bool init_notice_icon(GuiState &gui, HostState &host, const fs::path &con
             LOG_WARN("Icon no found for trophy id: {} on NpComId: {}", info.content_id, info.id);
             return false;
         } else {
-            const auto default_fw_icon{ fs::path(host.pref_path) / "vs0/data/internal/livearea/default/sce_sys/icon0.png" };
-            const auto default_icon{ fs::path(host.base_path) / "data/image/icon.png" };
-            if (fs::exists(default_fw_icon) || fs::exists(default_icon)) {
-                std::ifstream image_stream(fs::exists(default_fw_icon) ? default_fw_icon.string() : default_icon.string(), std::ios::binary | std::ios::ate);
-                const std::size_t fsize = image_stream.tellg();
-                buffer.resize(fsize);
-                image_stream.seekg(0, std::ios::beg);
-                image_stream.read(reinterpret_cast<char *>(&buffer[0]), fsize);
-            } else {
+            buffer = init_default_icon(gui, host);
+            if (buffer.empty()) {
                 LOG_WARN("Not found defaut icon for this notice content: {}", info.content_id);
                 return false;
             }
@@ -86,10 +79,10 @@ static bool init_notice_icon(GuiState &gui, HostState &host, const fs::path &con
         LOG_ERROR("Invalid icon for notice id: {}, [{}] in path {}.", info.id, content_path.string());
         return false;
     }
-    gui.notice_info_icon[info.date].init(gui.imgui_state.get(), data, width, height);
+    gui.notice_info_icon[info.time].init(gui.imgui_state.get(), data, width, height);
     stbi_image_free(data);
 
-    return gui.notice_info_icon.find(info.date) != gui.notice_info_icon.end();
+    return gui.notice_info_icon.find(info.time) != gui.notice_info_icon.end();
 }
 
 static bool set_notice_info(GuiState &gui, HostState &host, const NoticeList &info) {
@@ -161,7 +154,7 @@ static bool set_notice_info(GuiState &gui, HostState &host, const NoticeList &in
             return false;
     }
 
-    notice_info.push_back({ info.id, info.content_id, info.group, info.type, info.date, name, msg });
+    notice_info.push_back({ info.id, info.content_id, info.group, info.type, info.time, name, msg });
 
     return true;
 }
@@ -182,12 +175,12 @@ void init_notice_info(GuiState &gui, HostState &host) {
                 for (const auto &notice : user.second) {
                     if (!set_notice_info(gui, host, notice)) {
                         const auto notice_index = std::find_if(notice_list[user.first].begin(), notice_list[user.first].end(), [&](const NoticeList &n) {
-                            return n.date == notice.date;
+                            return n.time == notice.time;
                         });
                         notice_list[user.first].erase(notice_index);
                         save_notice_list(host);
                     } else
-                        notice_info_new[notice.date] = notice_list_new[user.first][notice.date];
+                        notice_info_new[notice.time] = notice_list_new[user.first][notice.time];
                 }
             }
         }
@@ -196,7 +189,7 @@ void init_notice_info(GuiState &gui, HostState &host) {
 
         // Sort in date order
         std::sort(notice_info.begin(), notice_info.end(), [&](const NoticeInfo &na, const NoticeInfo &nb) {
-            return na.date > nb.date;
+            return na.time > nb.time;
         });
     }
 }
@@ -222,8 +215,8 @@ void get_notice_list(HostState &host) {
                         noticeList.content_id = notice.attribute("content_id").as_string();
                         noticeList.group = notice.attribute("group").as_string();
                         noticeList.type = notice.attribute("type").as_string();
-                        noticeList.date = time_t(notice.attribute("date").as_int());
-                        notice_list_new[user_id][noticeList.date] = notice.attribute("new").as_bool();
+                        noticeList.time = !notice.attribute("time").empty() ? notice.attribute("time").as_llong() : (notice.attribute("date").as_llong() * 1000); // Backward Compat
+                        notice_list_new[user_id][noticeList.time] = notice.attribute("new").as_bool();
                         notice_list[user_id].push_back(noticeList);
                     }
                 }
@@ -250,7 +243,7 @@ void save_notice_list(HostState &host) {
         user_child.append_attribute("count_new") = notice_list_count_new[user.first];
 
         std::sort(notice_list[user.first].begin(), notice_list[user.first].end(), [&](const NoticeList &na, const NoticeList &nb) {
-            return na.date > nb.date;
+            return na.time > nb.time;
         });
 
         for (const auto &notice : user.second) {
@@ -259,8 +252,8 @@ void save_notice_list(HostState &host) {
             info_child.append_attribute("content_id") = notice.content_id.c_str();
             info_child.append_attribute("group") = notice.group.c_str();
             info_child.append_attribute("type") = notice.type.c_str();
-            info_child.append_attribute("date") = notice.date;
-            info_child.append_attribute("new") = notice_list_new[user.first][notice.date];
+            info_child.append_attribute("time") = notice.time;
+            info_child.append_attribute("new") = notice_list_new[user.first][notice.time];
         }
     }
 
@@ -284,15 +277,15 @@ void update_notice_info(GuiState &gui, HostState &host, const std::string &type)
         info.group = std::to_string(int(trophy_data.trophy_kind));
     }
     info.type = type;
-    info.date = std::time(nullptr);
-    notice_info_new[info.date] = true;
-    notice_list_new[user_id][info.date] = true;
+    info.time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    notice_info_new[info.time] = true;
+    notice_list_new[user_id][info.time] = true;
     notice_list[user_id].push_back(info);
     if (set_notice_info(gui, host, info)) {
         ++notice_info_count_new;
         ++notice_list_count_new[user_id];
         std::sort(notice_info.begin(), notice_info.end(), [&](const NoticeInfo &na, const NoticeInfo &nb) {
-            return na.date > nb.date;
+            return na.time > nb.time;
         });
 
         save_notice_list(host);
@@ -310,13 +303,14 @@ static void clean_notice_info_new(const std::string &user_id) {
 
 static std::string get_notice_time(GuiState &gui, HostState &host, const time_t &time) {
     std::string date;
-    auto diff_time = difftime(std::time(nullptr), time);
+    const auto time_in_second = time / 1000;
+    const auto diff_time = difftime(std::time(nullptr), time_in_second);
     static const auto minute = 60;
     static const auto hour = minute * 60;
     static const auto day = hour * 24;
     if (diff_time >= day) {
         tm date_tm = {};
-        SAFE_LOCALTIME(&time, &date_tm);
+        SAFE_LOCALTIME(&time_in_second, &date_tm);
         auto DATE_TIME = get_date_time(gui, host, date_tm);
         date = fmt::format("{} {}", DATE_TIME["date"], DATE_TIME["clock"]);
         if (gui.users[host.io.user_id].clock_12_hour)
@@ -402,22 +396,22 @@ static void draw_notice_info(GuiState &gui, HostState &host) {
             const auto SELECT_SIZE = ImVec2(POPUP_SIZE.x, 80.f * SCALE.y);
 
             for (const auto &notice : notice_info) {
-                if (notice.date != notice_info.front().date)
+                if (notice.time != notice_info.front().time)
                     ImGui::Separator();
                 const auto ICON_POS = ImGui::GetCursorPos();
-                if (gui.notice_info_icon.find(notice.date) != gui.notice_info_icon.end()) {
+                if (gui.notice_info_icon.find(notice.time) != gui.notice_info_icon.end()) {
                     ImGui::SetCursorPos(ImVec2(ICON_POS.x + (ImGui::GetColumnWidth() / 2.f) - (ICON_SIZE.x / 2.f), ICON_POS.y + (SELECT_SIZE.y / 2.f) - (ICON_SIZE.y / 2.f)));
-                    ImGui::Image(gui.notice_info_icon[notice.date], ICON_SIZE);
+                    ImGui::Image(gui.notice_info_icon[notice.time], ICON_SIZE);
                 }
                 ImGui::SetCursorPosY(ICON_POS.y);
-                ImGui::PushID(std::to_string(notice.date).c_str());
+                ImGui::PushID(std::to_string(notice.time).c_str());
                 const auto SELECT_COLOR = ImVec4(0.23f, 0.68f, 0.95f, 0.60f);
                 const auto SELECT_COLOR_HOVERED = ImVec4(0.23f, 0.68f, 0.99f, 0.80f);
                 const auto SELECT_COLOR_ACTIVE = ImVec4(0.23f, 0.68f, 1.f, 1.f);
                 ImGui::PushStyleColor(ImGuiCol_Header, SELECT_COLOR);
                 ImGui::PushStyleColor(ImGuiCol_HeaderHovered, SELECT_COLOR_HOVERED);
                 ImGui::PushStyleColor(ImGuiCol_HeaderActive, SELECT_COLOR_ACTIVE);
-                if (ImGui::Selectable("##icon", notice_info_new[notice.date], ImGuiSelectableFlags_SpanAllColumns, SELECT_SIZE)) {
+                if (ImGui::Selectable("##icon", notice_info_new[notice.time], ImGuiSelectableFlags_SpanAllColumns, SELECT_SIZE)) {
                     clean_notice_info_new(host.io.user_id);
                     save_notice_list(host);
                     if (notice.type == "content") {
@@ -440,7 +434,7 @@ static void draw_notice_info(GuiState &gui, HostState &host) {
                 ImGui::Spacing();
                 ImGui::SetWindowFontScale(0.9f * RES_SCALE.x);
                 ImGui::TextColored(GUI_COLOR_TEXT, "%s", notice.msg.c_str());
-                const auto notice_time = get_notice_time(gui, host, notice.date);
+                const auto notice_time = get_notice_time(gui, host, notice.time);
                 const auto notice_time_size = ImGui::CalcTextSize(notice_time.c_str());
                 ImGui::SetCursorPos(ImVec2(POPUP_SIZE.x - (34.f * SCALE.x) - notice_time_size.x, ImGui::GetCursorPosY() - (8.f * SCALE.y)));
                 ImGui::TextColored(GUI_COLOR_TEXT, "%s", notice_time.c_str());
@@ -516,30 +510,45 @@ void draw_information_bar(GuiState &gui, HostState &host) {
     ImGui::SetNextWindowSize(ImVec2(display_size.x, INFORMATION_BAR_HEIGHT), ImGuiCond_Always);
     ImGui::Begin("##information_bar", &gui.live_area.information_bar, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings);
 
-    ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(0.f, 0.f), ImVec2(display_size.x, INFORMATION_BAR_HEIGHT), is_theme_color ? gui.information_bar_color["bar"] : DEFAULT_BAR_COLOR, 0.f, ImDrawCornerFlags_All);
+    ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(0.f, 0.f), ImVec2(display_size.x, INFORMATION_BAR_HEIGHT), is_theme_color ? gui.information_bar_color["bar"] : DEFAULT_BAR_COLOR, 0.f, ImDrawFlags_RoundCornersAll);
 
     if (gui.live_area.app_selector || gui.live_area.live_area_screen) {
-        const auto home_icon_center = (display_size.x / 2.f) - (32.f * ((float(gui.apps_list_opened.size())) / 2.f)) * SCALE.x;
-        // Draw Home Icon
-        ImGui::GetForegroundDrawList()->AddTriangleFilled(ImVec2(home_icon_center - (13.f * SCALE.x), 16.f * SCALE.y), ImVec2(home_icon_center, 6.f * SCALE.y), ImVec2(home_icon_center + (13.f * SCALE.x), 16.f * SCALE.y), gui.information_bar_color["indicator"]);
-        ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(home_icon_center - (8.f * SCALE.x), 16.f * SCALE.y), ImVec2(home_icon_center + (8.f * SCALE.x), 26.f * SCALE.y), gui.information_bar_color["indicator"]);
-        if (gui.current_app_selected != -1) {
-            ImGui::GetForegroundDrawList()->AddTriangleFilled(ImVec2(home_icon_center - (13.f * SCALE.x), 16.f * SCALE.y), ImVec2(home_icon_center, 6.f * SCALE.y), ImVec2(home_icon_center + (13.f * SCALE.x), 16.f * SCALE.y), IM_COL32(0.f, 0.f, 0.f, 100.f));
-            ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(home_icon_center - (8.f * SCALE.x), 16.f * SCALE.y), ImVec2(home_icon_center + (8.f * SCALE.x), 26.f * SCALE.y), IM_COL32(0.f, 0.f, 0.f, 100.f));
-        }
-        ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(home_icon_center - (3.f * SCALE.x), 18.5f * SCALE.y), ImVec2(home_icon_center + (3.f * SCALE.x), 26.f * SCALE.y), gui.information_bar_color["bar"]);
+        const auto HOME_ICON_POS_CENTER = (display_size.x / 2.f) - (32.f * ((float(gui.apps_list_opened.size())) / 2.f)) * SCALE.x;
+        const auto APP_IS_OPEN = gui.current_app_selected >= 0;
 
-        const float decal_app_icon_pos = 34.f * ((float(gui.apps_list_opened.size()) - 2) / 2.f);
+        // Draw Home Icon
+        const std::vector<ImVec2> HOME_UP_POS = { ImVec2(HOME_ICON_POS_CENTER - (13.f * SCALE.x), 16.f * SCALE.y), ImVec2(HOME_ICON_POS_CENTER, 6.f * SCALE.y), ImVec2(HOME_ICON_POS_CENTER + (13.f * SCALE.x), 16.f * SCALE.y) };
+        const auto HOME_DOWN_POS_MINI = ImVec2(HOME_ICON_POS_CENTER - (8.f * SCALE.x), 16.f * SCALE.y);
+        const auto HOME_DOWN_POS_MAX = ImVec2(HOME_ICON_POS_CENTER + (8.f * SCALE.x), 26.f * SCALE.y);
+
+        ImGui::GetForegroundDrawList()->AddTriangleFilled(HOME_UP_POS[0], HOME_UP_POS[1], HOME_UP_POS[2], gui.information_bar_color["indicator"]);
+        ImGui::GetForegroundDrawList()->AddRectFilled(HOME_DOWN_POS_MINI, HOME_DOWN_POS_MAX, gui.information_bar_color["indicator"]);
+        if (APP_IS_OPEN) {
+            ImGui::GetForegroundDrawList()->AddTriangleFilled(HOME_UP_POS[0], HOME_UP_POS[1], HOME_UP_POS[2], IM_COL32(0.f, 0.f, 0.f, 100.f));
+            ImGui::GetForegroundDrawList()->AddRectFilled(HOME_DOWN_POS_MINI, HOME_DOWN_POS_MAX, IM_COL32(0.f, 0.f, 0.f, 100.f));
+        }
+        ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(HOME_ICON_POS_CENTER - (3.f * SCALE.x), 18.5f * SCALE.y), ImVec2(HOME_ICON_POS_CENTER + (3.f * SCALE.x), 26.f * SCALE.y), gui.information_bar_color["bar"]);
+
         // Draw App Icon
+        const float decal_app_icon_pos = 34.f * ((float(gui.apps_list_opened.size()) - 2) / 2.f);
+        const auto ICON_SIZE_SCALE = 28.f * SCALE.x;
+
         for (auto a = 0; a < gui.apps_list_opened.size(); a++) {
-            const auto icon_scal_pos = ImVec2((display_size.x / 2.f) - (14.f * SCALE.x) - (decal_app_icon_pos * SCALE.x) + (a * (34 * SCALE.x)), 2.f * SCALE.y);
-            const auto icon_scal_size = ImVec2(icon_scal_pos.x + (28.0f * SCALE.x), icon_scal_pos.y + (28.f * SCALE.y));
-            if (get_app_icon(gui, gui.apps_list_opened[a])->first == gui.apps_list_opened[a])
-                ImGui::GetForegroundDrawList()->AddImageRounded(get_app_icon(gui, gui.apps_list_opened[a])->second, icon_scal_pos, icon_scal_size, ImVec2(0, 0), ImVec2(1, 1), IM_COL32_WHITE, 15.f * SCALE.x, ImDrawCornerFlags_All);
+            const auto ICON_POS_MINI_SCALE = ImVec2((display_size.x / 2.f) - (14.f * SCALE.x) - (decal_app_icon_pos * SCALE.x) + (a * (34 * SCALE.x)), 2.f * SCALE.y);
+            const auto ICON_POS_MAX_SCALE = ImVec2(ICON_POS_MINI_SCALE.x + ICON_SIZE_SCALE, ICON_POS_MINI_SCALE.y + ICON_SIZE_SCALE);
+            const auto ICON_CENTER_POS = ImVec2(ICON_POS_MINI_SCALE.x + (ICON_SIZE_SCALE / 2.f), ICON_POS_MINI_SCALE.y + (ICON_SIZE_SCALE / 2.f));
+            const auto APPS_OPENED = gui.apps_list_opened[a];
+            auto &APP_ICON_TYPE = APPS_OPENED.find("NPXS") != std::string::npos ? gui.app_selector.sys_apps_icon : gui.app_selector.user_apps_icon;
+
+            // Check if icon exist
+            if (APP_ICON_TYPE.find(APPS_OPENED) != APP_ICON_TYPE.end())
+                ImGui::GetForegroundDrawList()->AddImageRounded(APP_ICON_TYPE[APPS_OPENED], ICON_POS_MINI_SCALE, ICON_POS_MAX_SCALE, ImVec2(0, 0), ImVec2(1, 1), IM_COL32_WHITE, 15.f * SCALE.x, ImDrawFlags_RoundCornersAll);
             else
-                ImGui::GetForegroundDrawList()->AddRectFilled(icon_scal_pos, icon_scal_size, IM_COL32_WHITE, 0.f, ImDrawCornerFlags_All);
-            if ((gui.current_app_selected < 0) || (gui.apps_list_opened[gui.current_app_selected] != gui.apps_list_opened[a]))
-                ImGui::GetForegroundDrawList()->AddRectFilled(icon_scal_pos, icon_scal_size, IM_COL32(0.f, 0.f, 0.f, 140.f), 15.f * SCALE.x, ImDrawCornerFlags_All);
+                ImGui::GetForegroundDrawList()->AddCircleFilled(ICON_CENTER_POS, ICON_SIZE_SCALE / 2.f, IM_COL32_WHITE);
+
+            // hide Icon no opened
+            if (!APP_IS_OPEN || (gui.apps_list_opened[gui.current_app_selected] != APPS_OPENED))
+                ImGui::GetForegroundDrawList()->AddCircleFilled(ICON_CENTER_POS, ICON_SIZE_SCALE / 2.f, IM_COL32(0.f, 0.f, 0.f, 140.f));
         }
     }
 
@@ -568,8 +577,8 @@ void draw_information_bar(GuiState &gui, HostState &host) {
     ImGui::GetForegroundDrawList()->AddText(gui.vita_font, CLOCK_DEFAULT_FONT_SCALE * RES_SCALE.x, CLOCK_POS, is_theme_color ? gui.information_bar_color["indicator"] : DEFAULT_INDICATOR_COLOR, DATE_TIME["clock"].c_str());
     if (host.io.user_id.empty() || gui.users[host.io.user_id].clock_12_hour)
         ImGui::GetForegroundDrawList()->AddText(gui.vita_font, DAY_MOMENT_DEFAULT_FONT_SCALE * RES_SCALE.x, DAY_MOMENT_POS, is_theme_color ? gui.information_bar_color["indicator"] : DEFAULT_INDICATOR_COLOR, DATE_TIME["day-moment"].c_str());
-    ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(display_size.x - (54.f * SCALE.x) - is_notif_pos, 12.f * SCALE.y), ImVec2(display_size.x - (50.f * SCALE.x) - is_notif_pos, 20 * SCALE.y), IM_COL32(81.f, 169.f, 32.f, 255.f), 0.f, ImDrawCornerFlags_All);
-    ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(display_size.x - (50.f * SCALE.x) - is_notif_pos, 5.f * SCALE.y), ImVec2(display_size.x - (12.f * SCALE.x) - is_notif_pos, 27 * SCALE.y), IM_COL32(81.f, 169.f, 32.f, 255.f), 2.f * SCALE.x, ImDrawCornerFlags_All);
+    ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(display_size.x - (54.f * SCALE.x) - is_notif_pos, 12.f * SCALE.y), ImVec2(display_size.x - (50.f * SCALE.x) - is_notif_pos, 20 * SCALE.y), IM_COL32(81.f, 169.f, 32.f, 255.f), 0.f, ImDrawFlags_RoundCornersAll);
+    ImGui::GetForegroundDrawList()->AddRectFilled(ImVec2(display_size.x - (50.f * SCALE.x) - is_notif_pos, 5.f * SCALE.y), ImVec2(display_size.x - (12.f * SCALE.x) - is_notif_pos, 27 * SCALE.y), IM_COL32(81.f, 169.f, 32.f, 255.f), 2.f * SCALE.x, ImDrawFlags_RoundCornersAll);
 
     if (host.display.imgui_render && !gui.live_area.start_screen && !gui.live_area.live_area_screen && get_sys_apps_state(gui) && (ImGui::IsWindowHovered(ImGuiHoveredFlags_None) || ImGui::IsItemClicked(0)))
         gui.live_area.information_bar = false;

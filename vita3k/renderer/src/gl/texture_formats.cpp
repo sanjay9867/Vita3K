@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <renderer/gl/functions.h>
 
 #include <gxm/functions.h>
@@ -36,7 +53,7 @@ static const GLint swizzle_bgr[4] = { GL_RED, GL_GREEN, GL_BLUE, GL_ONE };
 static const GLint swizzle_abgr[4] = { GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA };
 static const GLint swizzle_argb[4] = { GL_BLUE, GL_GREEN, GL_RED, GL_ALPHA };
 static const GLint swizzle_rgba[4] = { GL_ALPHA, GL_BLUE, GL_GREEN, GL_RED };
-static const GLint swizzle_bgra[4] = { GL_ALPHA, GL_RED, GL_GREEN, GL_BLUE };
+static const GLint swizzle_bgra[4] = { GL_GREEN, GL_BLUE, GL_ALPHA, GL_RED };
 static const GLint swizzle_1bgr[4] = { GL_RED, GL_GREEN, GL_BLUE, GL_ONE };
 static const GLint swizzle_1rgb[4] = { GL_BLUE, GL_GREEN, GL_RED, GL_ONE };
 static const GLint swizzle_rgb1[4] = { GL_ONE, GL_BLUE, GL_GREEN, GL_RED };
@@ -187,8 +204,7 @@ static const GLint *translate_swizzle(SceGxmTextureSwizzleYUV422Mode mode) {
     return swizzle_yuyv_csc0;
 }
 
-GLenum translate_internal_format(SceGxmTextureFormat src) {
-    const SceGxmTextureBaseFormat base_format = gxm::get_base_format(src);
+GLenum translate_internal_format(SceGxmTextureBaseFormat base_format) {
     switch (base_format) {
     // 1 Component.
     case SCE_GXM_TEXTURE_BASE_FORMAT_U8:
@@ -261,8 +277,7 @@ GLenum translate_internal_format(SceGxmTextureFormat src) {
     }
 }
 
-GLenum translate_format(SceGxmTextureFormat src) {
-    const SceGxmTextureBaseFormat base_format = gxm::get_base_format(src);
+GLenum translate_format(SceGxmTextureBaseFormat base_format) {
     switch (base_format) {
     // 1 Component.
     case SCE_GXM_TEXTURE_BASE_FORMAT_U8:
@@ -335,8 +350,7 @@ GLenum translate_format(SceGxmTextureFormat src) {
     }
 }
 
-GLenum translate_type(SceGxmTextureFormat format) {
-    const SceGxmTextureBaseFormat base_format = gxm::get_base_format(format);
+GLenum translate_type(SceGxmTextureBaseFormat base_format) {
     switch (base_format) {
     case SCE_GXM_TEXTURE_BASE_FORMAT_U8:
         return GL_UNSIGNED_BYTE;
@@ -409,10 +423,8 @@ GLenum translate_type(SceGxmTextureFormat format) {
     case SCE_GXM_TEXTURE_BASE_FORMAT_PVRT4BPP:
         return GL_BYTE;
     case SCE_GXM_TEXTURE_BASE_FORMAT_PVRTII2BPP:
-        LOG_WARN("Not perfectly handled base format SCE_GXM_TEXTURE_BASE_FORMAT_PVRTII2BPP");
         return GL_BYTE;
     case SCE_GXM_TEXTURE_BASE_FORMAT_PVRTII4BPP:
-        LOG_WARN("Not perfectly handled base format SCE_GXM_TEXTURE_BASE_FORMAT_PVRTII4BPP");
         return GL_BYTE;
     case SCE_GXM_TEXTURE_BASE_FORMAT_UBC1:
         return GL_UNSIGNED_BYTE;
@@ -436,8 +448,7 @@ GLenum translate_type(SceGxmTextureFormat format) {
     case SCE_GXM_TEXTURE_BASE_FORMAT_S8S8S8:
         return GL_BYTE;
     case SCE_GXM_TEXTURE_BASE_FORMAT_U2F10F10F10:
-        LOG_WARN("Unhandled base format SCE_GXM_TEXTURE_BASE_FORMAT_U2F10F10F10");
-        return GL_INT_2_10_10_10_REV;
+        return GL_UNSIGNED_INT_2_10_10_10_REV;
     }
 
     LOG_WARN("Unhandled base format {}", log_hex(base_format));

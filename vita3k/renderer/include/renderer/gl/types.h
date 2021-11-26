@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -68,7 +68,8 @@ struct GLContext : public renderer::Context {
     GLTextureCacheState texture_cache;
     GLObjectArray<1> vertex_array;
     GLObjectArray<1> element_buffer;
-    GLObjectArray<32> uniform_buffer;
+    GLObjectArray<2> ssbo;
+    GLObjectArray<2> uniform_buffer;
     const GLRenderTarget *render_target;
 
     std::map<int, std::vector<uint8_t>> ubo_data;
@@ -80,6 +81,8 @@ struct GLContext : public renderer::Context {
 
     std::vector<UniformSetRequest> vertex_set_requests;
     std::vector<UniformSetRequest> fragment_set_requests;
+
+    ~GLContext() override = default;
 };
 
 struct GLShaderStatics {
@@ -117,5 +120,7 @@ struct GLRenderTarget : public renderer::RenderTarget {
     GLObjectArray<2> renderbuffers;
     GLObjectArray<1> framebuffer;
     GLObjectArray<1> color_attachment;
+
+    ~GLRenderTarget() override = default;
 };
 } // namespace renderer::gl

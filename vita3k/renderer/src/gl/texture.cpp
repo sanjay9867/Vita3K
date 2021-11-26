@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <renderer/functions.h>
 #include <renderer/profile.h>
 #include <renderer/pvrt-dec.h>
@@ -37,12 +54,15 @@ void configure_bound_texture(const SceGxmTexture &gxm_texture) {
     R_PROFILE(__func__);
 
     const SceGxmTextureFormat fmt = gxm::get_format(&gxm_texture);
+    const SceGxmTextureBaseFormat base_format = gxm::get_base_format(fmt);
     const SceGxmTextureAddrMode uaddr = (SceGxmTextureAddrMode)(gxm_texture.uaddr_mode);
     const SceGxmTextureAddrMode vaddr = (SceGxmTextureAddrMode)(gxm_texture.vaddr_mode);
     const GLint *const swizzle = translate_swizzle(fmt);
+    uint32_t mip_count = gxm_texture.true_mip_count();
 
     // TODO Support mip-mapping.
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, gxm_texture.mip_count);
+    if (mip_count)
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, mip_count - 1);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, translate_wrap_mode(uaddr));
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, translate_wrap_mode(vaddr));
@@ -52,11 +72,11 @@ void configure_bound_texture(const SceGxmTexture &gxm_texture) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, translate_minmag_filter((SceGxmTextureFilter)gxm_texture.mag_filter));
     glTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_RGBA, swizzle);
 
-    const GLenum internal_format = translate_internal_format(fmt);
+    const GLenum internal_format = translate_internal_format(base_format);
     auto width = static_cast<uint32_t>(gxm::get_width(&gxm_texture));
     auto height = static_cast<uint32_t>(gxm::get_height(&gxm_texture));
-    const GLenum format = translate_format(fmt);
-    const GLenum type = translate_type(fmt);
+    const GLenum format = translate_format(base_format);
+    const GLenum type = translate_type(base_format);
     const auto texture_type = gxm_texture.texture_type();
     const bool is_swizzled = (texture_type == SCE_GXM_TEXTURE_SWIZZLED) || (texture_type == SCE_GXM_TEXTURE_CUBE) || (texture_type == SCE_GXM_TEXTURE_SWIZZLED_ARBITRARY) || (texture_type == SCE_GXM_TEXTURE_CUBE_ARBITRARY);
     const auto base_fmt = gxm::get_base_format(fmt);
@@ -64,7 +84,7 @@ void configure_bound_texture(const SceGxmTexture &gxm_texture) {
     size_t compressed_size = 0;
     uint32_t mip_index = 0;
 
-    while (mip_index < gxm_texture.mip_count + 1 && width && height) {
+    while (mip_index < mip_count && width && height) {
         if (!is_swizzled && renderer::texture::is_compressed_format(base_fmt, width, height, compressed_size)) {
             glCompressedTexImage2D(GL_TEXTURE_2D, mip_index, internal_format, width, height, 0, static_cast<GLsizei>(compressed_size), nullptr);
         } else if (!is_swizzled || (is_swizzled && can_texture_be_unswizzled_without_decode(base_fmt))) {
@@ -118,11 +138,15 @@ static size_t decompress_compressed_swizz_texture(SceGxmTextureBaseFormat fmt, v
             reinterpret_cast<std::uint32_t *>(dest), ubc_type);
         return (((width + 3) / 4) * ((height + 3) / 4) * ((ubc_type > 1) ? 16 : 8));
     } else if ((fmt >= SCE_GXM_TEXTURE_BASE_FORMAT_PVRT2BPP) && (fmt <= SCE_GXM_TEXTURE_BASE_FORMAT_PVRTII4BPP)) {
-        // TODO, is not perfect for PVRT-II.
         pvr::PVRTDecompressPVRTC(data, (fmt == SCE_GXM_TEXTURE_BASE_FORMAT_PVRT2BPP) || (fmt == SCE_GXM_TEXTURE_BASE_FORMAT_PVRTII2BPP), width, height,
             (fmt == SCE_GXM_TEXTURE_BASE_FORMAT_PVRTII2BPP) || (fmt == SCE_GXM_TEXTURE_BASE_FORMAT_PVRTII4BPP), reinterpret_cast<uint8_t *>(dest));
-        // TODO, calcule return is not sur.
-        return ((width + 3) / 4) * ((height + 3) / 4);
+
+        const bool is_2bpp = (fmt == SCE_GXM_TEXTURE_BASE_FORMAT_PVRT2BPP) || (fmt == SCE_GXM_TEXTURE_BASE_FORMAT_PVRTII2BPP);
+
+        const std::uint32_t num_xword = (width + (is_2bpp ? 7 : 3)) / (is_2bpp ? 8 : 4);
+        const std::uint32_t num_yword = (height + 3) / 4;
+
+        return num_xword * num_yword * 8;
     }
 
     return 0;
@@ -187,6 +211,7 @@ void upload_bound_texture(const SceGxmTexture &gxm_texture, const MemState &mem)
     R_PROFILE(__func__);
 
     const SceGxmTextureFormat fmt = gxm::get_format(&gxm_texture);
+    const SceGxmTextureBaseFormat base_format = gxm::get_base_format(fmt);
     auto width = static_cast<uint32_t>(gxm::get_width(&gxm_texture));
     auto height = static_cast<uint32_t>(gxm::get_height(&gxm_texture));
     const Ptr<uint8_t> data(gxm_texture.data_addr << 2);
@@ -199,7 +224,6 @@ void upload_bound_texture(const SceGxmTexture &gxm_texture, const MemState &mem)
     const void *pixels = nullptr;
 
     size_t pixels_per_stride = 0;
-    const auto base_format = gxm::get_base_format(fmt);
     size_t bpp = renderer::texture::bits_per_pixel(base_format);
     size_t bytes_per_pixel = (bpp + 7) >> 3;
 
@@ -208,19 +232,19 @@ void upload_bound_texture(const SceGxmTexture &gxm_texture, const MemState &mem)
     const bool need_decompress_and_unswizzle_on_cpu = is_swizzled && !can_texture_be_unswizzled_without_decode(base_format);
 
     uint32_t mip_index = 0;
-    uint32_t total_mip = gxm_texture.mip_count;
+    uint32_t total_mip = gxm_texture.true_mip_count();
     size_t source_size = 0;
     std::uint32_t org_width = width;
     std::uint32_t org_height = height;
 
     if (texture_type == SCE_GXM_TEXTURE_LINEAR_STRIDED) {
-        total_mip = 0;
+        total_mip = 1;
     }
 
-    while (mip_index < total_mip + 1 && width && height) {
+    while (mip_index < total_mip && width && height) {
         pixels = texture_data;
 
-        if (gxm::is_paletted_format(fmt)) {
+        if (gxm::is_paletted_format(base_format)) {
             palette_texture_pixels.resize(width * height * 4);
             if (base_format == SCE_GXM_TEXTURE_BASE_FORMAT_P8) {
                 renderer::texture::palette_texture_to_rgba_8(palette_texture_pixels.data(),
@@ -323,11 +347,11 @@ void upload_bound_texture(const SceGxmTexture &gxm_texture, const MemState &mem)
             break;
         }
 
-        if (gxm::is_paletted_format(fmt)) {
+        if (gxm::is_paletted_format(base_format)) {
             pixels_per_stride = width;
         }
 
-        if (gxm::is_yuv_format(fmt)) {
+        if (gxm::is_yuv_format(base_format)) {
             switch (fmt) {
             case SCE_GXM_TEXTURE_FORMAT_YUV420P2_CSC0:
             case SCE_GXM_TEXTURE_FORMAT_YVU420P2_CSC0:
@@ -360,8 +384,8 @@ void upload_bound_texture(const SceGxmTexture &gxm_texture, const MemState &mem)
             }
         }
 
-        const GLenum format = translate_format(fmt);
-        const GLenum type = translate_type(fmt);
+        const GLenum format = translate_format(base_format);
+        const GLenum type = translate_type(base_format);
 
         glPixelStorei(GL_UNPACK_ROW_LENGTH, static_cast<GLint>(pixels_per_stride));
 
@@ -419,15 +443,15 @@ void dump(const SceGxmTexture &gxm_texture, const MemState &mem, const std::stri
 
     size_t bpp = renderer::texture::bits_per_pixel(base_format);
     size_t stride = (width + 7) & ~7; // NOTE: This is correct only with linear textures.
-    if (gxm::is_paletted_format(format)) {
+    if (gxm::is_paletted_format(base_format)) {
         stride = width;
     }
     size_t size = (bpp * stride * height) / 8;
 
-    if (gxm::is_yuv_format(format)) {
+    if (gxm::is_yuv_format(base_format)) {
         bpp = 24;
         size = width * height * 3;
-    } else if (need_decompress_and_unswizzle_on_cpu || gxm::is_paletted_format(format)) {
+    } else if (need_decompress_and_unswizzle_on_cpu || gxm::is_paletted_format(base_format)) {
         bpp = 32;
         size = width * height * 4;
     }
@@ -435,8 +459,8 @@ void dump(const SceGxmTexture &gxm_texture, const MemState &mem, const std::stri
 
     g_pixels.resize(size);
 
-    auto gl_format = texture::translate_format(format);
-    auto gl_type = texture::translate_type(format);
+    auto gl_format = texture::translate_format(base_format);
+    auto gl_type = texture::translate_type(base_format);
 
     if (need_decompress_and_unswizzle_on_cpu) {
         gl_format = GL_RGBA;

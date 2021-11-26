@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@
 
 #include <condition_variable>
 #include <cpu/state.h>
+#include <kernel/callback.h>
 #include <kernel/types.h>
 #include <list>
 #include <mem/block.h>
@@ -103,6 +104,7 @@ struct ThreadState {
     RunQueue run_queue;
 
     ThreadSignal signal;
+    std::vector<CallbackPtr> callbacks;
     std::condition_variable status_cond;
     std::vector<std::shared_ptr<ThreadState>> waiting_threads;
     int returned_value = 0;

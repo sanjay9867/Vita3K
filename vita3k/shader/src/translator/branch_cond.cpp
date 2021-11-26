@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2019 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -374,17 +374,18 @@ bool USSETranslatorVisitor::vtst(
 
     const Imm4 load_mask = tb_decode_load_mask[chan_cc];
 
-    bool use_double_reg = alu_sel == 0;
+    const bool use_double_reg = alu_sel == 0;
+    const uint8_t bits_max = use_double_reg ? 8 : 7;
 
     // Build up source
-    inst.opr.src1 = decode_src12(inst.opr.src1, src1_n, src1_bank, src1_ext, use_double_reg, 8, m_second_program);
-    inst.opr.src2 = decode_src12(inst.opr.src2, src2_n, src2_bank, src2_ext, use_double_reg, 8, m_second_program);
+    inst.opr.src1 = decode_src12(inst.opr.src1, src1_n, src1_bank, src1_ext, use_double_reg, bits_max, m_second_program);
+    inst.opr.src2 = decode_src12(inst.opr.src2, src2_n, src2_bank, src2_ext, use_double_reg, bits_max, m_second_program);
 
     inst.opr.src1.type = load_data_type;
     inst.opr.src2.type = load_data_type;
 
     inst.opr.src1.swizzle = SWIZZLE_CHANNEL_4_DEFAULT;
-    inst.opr.src2.swizzle = src2_vscomp ? (Swizzle4 SWIZZLE_CHANNEL_4(X, X, X, X)) : (Swizzle4 SWIZZLE_CHANNEL_4_DEFAULT);
+    inst.opr.src2.swizzle = (src2_vscomp && (alu_sel == 0)) ? (Swizzle4 SWIZZLE_CHANNEL_4(X, X, X, X)) : (Swizzle4 SWIZZLE_CHANNEL_4_DEFAULT);
 
     if (src1_neg) {
         inst.opr.src1.flags |= RegisterFlags::Negative;
@@ -520,57 +521,8 @@ bool USSETranslatorVisitor::br(
     Imm1 any_inst,
     Imm1 all_inst,
     uint32_t br_off) {
-    Opcode op = (br_type == 0) ? Opcode::BA : Opcode::BR;
+    assert(false && "Unreachable");
 
-    if (op == Opcode::BR && (br_off & (1 << 19))) {
-        // PC bits on SGX543 is 20 bits
-        br_off |= 0xFFFFFFFF << 20;
-    }
-
-    auto cur_pc = m_recompiler.cur_pc;
-
-    LOG_DISASM("{:016x}: {}{} #{}", m_instr, disasm::e_predicate_str(pred), (br_type == 0) ? "BA" : "BR", br_off + cur_pc);
-    spv::Function *br_block = m_recompiler.get_or_recompile_block(m_recompiler.avail_blocks[br_off + cur_pc]);
-
-    m_b.setLine(m_recompiler.cur_pc);
-
-    if (pred == ExtPredicate::NONE) {
-        m_b.createFunctionCall(br_block, {});
-    } else {
-        spv::Id pred_v = spv::NoResult;
-
-        Operand pred_opr{};
-        pred_opr.bank = RegisterBank::PREDICATE;
-
-        bool do_neg = false;
-
-        if (pred >= ExtPredicate::P0 && pred <= ExtPredicate::P3) {
-            pred_opr.num = static_cast<int>(pred) - static_cast<int>(ExtPredicate::P0);
-        } else if (pred >= ExtPredicate::NEGP0 && pred <= ExtPredicate::NEGP1) {
-            pred_opr.num = static_cast<int>(pred) - static_cast<int>(ExtPredicate::NEGP0);
-            do_neg = true;
-        }
-
-        pred_v = load(pred_opr, 0b0001);
-
-        if (pred_v == spv::NoResult) {
-            LOG_ERROR("Pred not loaded");
-            return false;
-        }
-
-        if (do_neg) {
-            std::vector<spv::Id> ops{ pred_v };
-            pred_v = m_b.createOp(spv::OpLogicalNot, m_b.makeBoolType(), ops);
-        }
-
-        spv::Function *continous_block = m_recompiler.get_or_recompile_block(m_recompiler.avail_blocks[cur_pc + 1]);
-        spv::Builder::If cond_builder(pred_v, spv::SelectionControlMaskNone, m_b);
-
-        m_b.createFunctionCall(br_block, {});
-        cond_builder.makeBeginElse();
-        m_b.createFunctionCall(continous_block, {});
-        cond_builder.makeEndIf();
-    }
-
+    LOG_ERROR("Branch instruction should not be recompiled here!");
     return true;
 }

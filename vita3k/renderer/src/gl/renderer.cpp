@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <renderer/functions.h>
 #include <renderer/profile.h>
 #include <renderer/state.h>
@@ -218,24 +235,6 @@ bool create(SDL_Window *window, std::unique_ptr<State> &state) {
     LOG_INFO("GL_VERSION = {}", glGetString(GL_VERSION));
     LOG_INFO("GL_SHADING_LANGUAGE_VERSION = {}", version);
 
-    // Try to parse and get version
-    const std::size_t dot_pos = version.find_first_of('.');
-
-    if (dot_pos != std::string::npos) {
-        const std::string major = version.substr(0, dot_pos);
-        const std::string minor = version.substr(dot_pos + 1);
-
-        gl_state.features.direct_pack_unpack_half = false;
-        gl_state.features.use_shader_binding = false;
-
-        if (std::atoi(major.c_str()) >= 4 && minor.length() >= 1) {
-            if (minor[0] >= '2') {
-                gl_state.features.direct_pack_unpack_half = true;
-                gl_state.features.use_shader_binding = true;
-            }
-        }
-    }
-
     if (choosen_minor_version >= 3) {
         glDebugMessageCallback(reinterpret_cast<GLDEBUGPROC>(debug_output_callback), nullptr);
     }
@@ -247,7 +246,6 @@ bool create(SDL_Window *window, std::unique_ptr<State> &state) {
         { "GL_ARB_fragment_shader_interlock", &gl_state.features.support_shader_interlock },
         { "GL_ARB_texture_barrier", &gl_state.features.support_texture_barrier },
         { "GL_EXT_shader_framebuffer_fetch", &gl_state.features.direct_fragcolor },
-        { "GL_ARB_shading_language_packing", &gl_state.features.pack_unpack_half_through_ext },
         { "GL_ARB_gl_spirv", &gl_state.features.spirv_shader }
     };
 
@@ -282,8 +280,24 @@ bool create(std::unique_ptr<Context> &context, const bool hashless_texture_cache
     context = std::make_unique<GLContext>();
     GLContext *gl_context = reinterpret_cast<GLContext *>(context.get());
 
-    return !(!texture::init(gl_context->texture_cache, hashless_texture_cache) || !gl_context->vertex_array.init(reinterpret_cast<renderer::Generator *>(glGenVertexArrays), reinterpret_cast<renderer::Deleter *>(glDeleteVertexArrays)) || !gl_context->element_buffer.init(reinterpret_cast<renderer::Generator *>(glGenBuffers), reinterpret_cast<renderer::Deleter *>(glDeleteBuffers)) || !gl_context->stream_vertex_buffers.init(reinterpret_cast<renderer::Generator *>(glGenBuffers), reinterpret_cast<renderer::Deleter *>(glDeleteBuffers))
-        || !gl_context->uniform_buffer.init(reinterpret_cast<renderer::Generator *>(glGenBuffers), reinterpret_cast<renderer::Deleter *>(glDeleteBuffers)));
+    const bool init_result = !(!texture::init(gl_context->texture_cache, hashless_texture_cache) || !gl_context->vertex_array.init(reinterpret_cast<renderer::Generator *>(glGenVertexArrays), reinterpret_cast<renderer::Deleter *>(glDeleteVertexArrays)) || !gl_context->element_buffer.init(reinterpret_cast<renderer::Generator *>(glGenBuffers), reinterpret_cast<renderer::Deleter *>(glDeleteBuffers)) || !gl_context->stream_vertex_buffers.init(reinterpret_cast<renderer::Generator *>(glGenBuffers), reinterpret_cast<renderer::Deleter *>(glDeleteBuffers))
+        || !gl_context->uniform_buffer.init(reinterpret_cast<renderer::Generator *>(glGenBuffers), reinterpret_cast<renderer::Deleter *>(glDeleteBuffers))
+        || !gl_context->ssbo.init(reinterpret_cast<renderer::Generator *>(glGenBuffers), reinterpret_cast<renderer::Deleter *>(glDeleteBuffers)));
+
+    if (!init_result) {
+        return false;
+    }
+
+    // Maxing SSBO sizes, we merge all buffers together so there's no way to reallocate safely without losing data, and the size here
+    // is acceptable (1024 * sizeof(vec4) * uniformBufferMaxCount). The maximum is 245.76 KB, GPU can hold it.
+    static constexpr std::size_t MAX_SSBO_BYTE_COUNT = 1024 * 16 * (SCE_GXM_MAX_UNIFORM_BUFFERS + 1);
+
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gl_context->ssbo[0]);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, MAX_SSBO_BYTE_COUNT, nullptr, GL_DYNAMIC_COPY);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, gl_context->ssbo[1]);
+    glBufferData(GL_SHADER_STORAGE_BUFFER, MAX_SSBO_BYTE_COUNT, nullptr, GL_DYNAMIC_COPY);
+
+    return true;
 }
 
 bool create(std::unique_ptr<RenderTarget> &rt, const SceGxmRenderTargetParams &params, const FeatureState &features) {
@@ -350,6 +364,20 @@ bool create(std::unique_ptr<RenderTarget> &rt, const SceGxmRenderTargetParams &p
     return true;
 }
 
+static void layout_ssbo_offset_from_uniform_buffer_sizes(UniformBufferSizes &sizes, UniformBufferSizes &offsets) {
+    std::uint32_t last_offset = 0;
+
+    for (std::size_t i = 0; i < sizes.size(); i++) {
+        if (sizes[i] != 0) {
+            // Round to vec4 unit
+            offsets[i] = last_offset;
+            last_offset += ((sizes[i] + 3) / 4 * 4);
+        } else {
+            offsets[i] = static_cast<std::uint32_t>(-1);
+        }
+    }
+}
+
 bool create(std::unique_ptr<FragmentProgram> &fp, GLState &state, const SceGxmProgram &program, const SceGxmBlendInfo *blend, GXPPtrMap &gxp_ptr_map, const char *base_path, const char *title_id) {
     R_PROFILE(__func__);
 
@@ -377,6 +405,7 @@ bool create(std::unique_ptr<FragmentProgram> &fp, GLState &state, const SceGxmPr
         frag_program_gl->alpha_dst = translate_blend_factor(blend->alphaDst);
     }
     shader::usse::get_uniform_buffer_sizes(program, fp->uniform_buffer_sizes);
+    layout_ssbo_offset_from_uniform_buffer_sizes(fp->uniform_buffer_sizes, fp->uniform_buffer_data_offsets);
 
     return true;
 }
@@ -394,6 +423,7 @@ bool create(std::unique_ptr<VertexProgram> &vp, GLState &state, const SceGxmProg
 
     shader::usse::get_uniform_buffer_sizes(program, vp->uniform_buffer_sizes);
     shader::usse::get_attribute_informations(program, vert_program_gl->attribute_infos);
+    layout_ssbo_offset_from_uniform_buffer_sizes(vp->uniform_buffer_sizes, vp->uniform_buffer_data_offsets);
 
     if (vert_program_gl->attribute_infos.empty()) {
         vert_program_gl->stripped_symbols_checked = false;
@@ -522,6 +552,26 @@ void get_surface_data(GLContext &context, size_t width, size_t height, size_t st
         LOG_ERROR("Color format not implemented: {}, report this to developer", format);
         glReadPixels(0, 0, static_cast<GLsizei>(width), static_cast<GLsizei>(height), GL_RGBA, GL_UNSIGNED_BYTE, pixels);
         break;
+    }
+
+    if (context.record.color_surface.surfaceType == SCE_GXM_COLOR_SURFACE_TILED) {
+        const SceGxmColorBaseFormat base_format = gxm::get_base_format(format);
+        const size_t bpp = renderer::color::bits_per_pixel(base_format);
+        const size_t bytes_per_pixel = (bpp + 7) >> 3;
+        std::vector<uint8_t> buffer;
+
+        buffer.resize(((width + 31) / 32) * ((height + 31) / 32) * 1024 * bytes_per_pixel);
+        for (int j = 0; j < height; j++) {
+            for (int hori_tile = 0; hori_tile < (width >> 5); hori_tile++) {
+                const size_t tile_position = hori_tile + (j >> 5) * ((width + 31) >> 5);
+                const size_t first_pixel_offset_in_tile = (tile_position << 10) + (j & 31) * 32;
+                const size_t first_pixel_offset_in_linear = (j * stride_in_pixels) + hori_tile * 32;
+
+                memcpy(buffer.data() + first_pixel_offset_in_tile * bytes_per_pixel,
+                    (const char *)(pixels) + first_pixel_offset_in_linear * bytes_per_pixel, 32 * bytes_per_pixel);
+            }
+        }
+        memcpy(pixels, buffer.data(), buffer.size());
     }
 
     glPixelStorei(GL_PACK_ROW_LENGTH, 0);

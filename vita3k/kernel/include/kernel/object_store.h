@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #pragma once
 
 #include <atomic>
@@ -36,9 +53,9 @@ const uint32_t TypeInfo::registered<T>::index = TypeInfo::add_type(1);
 
 class ObjectStore {
 public:
-    ObjectStore() {}
+    ObjectStore() = default;
 
-    ~ObjectStore() {}
+    ~ObjectStore() = default;
 
     template <typename T>
     T *get() {
@@ -49,7 +66,7 @@ public:
     }
 
     template <typename T, typename... Args>
-    bool create(Args &&... args) {
+    bool create(Args &&...args) {
         std::lock_guard<std::mutex> lock(mutex);
         auto ptr = std::make_shared<T>(std::forward<Args>(args)...);
         objs.emplace(TypeInfo::registered<T>::index, ptr);
@@ -58,7 +75,8 @@ public:
     template <typename T>
     void erase() {
         auto it = objs.find(TypeInfo::registered<T>::index);
-        assert(it != objs.end());
+        if (it == objs.end())
+            return;
         objs.erase(it);
     }
 

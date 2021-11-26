@@ -20,11 +20,11 @@
 #include <gui/functions.h>
 
 #include <gui/imgui_impl_sdl.h>
+#include <gui/state.h>
 
 #include <boost/algorithm/string/trim.hpp>
 #include <glutil/gl.h>
 #include <host/functions.h>
-#include <host/state.h>
 #include <io/VitaIoDevice.h>
 #include <io/vfs.h>
 #include <util/fs.h>
@@ -174,10 +174,8 @@ static void init_font(GuiState &gui, HostState &host) {
         const auto sys_lang = static_cast<SceSystemParamLang>(host.cfg.sys_lang);
         if (host.cfg.asia_font_support || (sys_lang == SCE_SYSTEM_PARAM_LANG_KOREAN))
             io.Fonts->AddFontFromFileTTF((fw_font_path / "kr0.pvf").string().c_str(), 19.2f * host.dpi_scale, &font_config, korean_range);
-        if (host.cfg.asia_font_support || (sys_lang == SCE_SYSTEM_PARAM_LANG_CHINESE_T))
+        if (host.cfg.asia_font_support || (sys_lang == SCE_SYSTEM_PARAM_LANG_CHINESE_T) || (sys_lang == SCE_SYSTEM_PARAM_LANG_CHINESE_S))
             io.Fonts->AddFontFromFileTTF((fw_font_path / "cn0.pvf").string().c_str(), 19.2f * host.dpi_scale, &font_config, chinese_range);
-        else if (sys_lang == SCE_SYSTEM_PARAM_LANG_CHINESE_S)
-            io.Fonts->AddFontFromFileTTF((fw_font_path / "cn0.pvf").string().c_str(), 19.2f * host.dpi_scale, &font_config, io.Fonts->GetGlyphRangesChineseSimplifiedCommon());
 
         io.Fonts->Build();
         font_config.MergeMode = false;
@@ -204,47 +202,104 @@ static void init_font(GuiState &gui, HostState &host) {
     io.DisplayFramebufferScale = { host.dpi_scale, host.dpi_scale };
 }
 
-void init_app_icon(GuiState &gui, HostState &host, const std::string &app_path) {
-    int32_t width = 0;
-    int32_t height = 0;
+vfs::FileBuffer init_default_icon(GuiState &gui, HostState &host) {
     vfs::FileBuffer buffer;
-
-    if (app_path.find("NPXS") != std::string::npos)
-        vfs::read_file(VitaIoDevice::vs0, buffer, host.pref_path, "app/" + app_path + "/sce_sys/icon0.png");
-    else
-        vfs::read_app_file(buffer, host.pref_path, app_path, "sce_sys/icon0.png");
 
     const auto default_fw_icon{ fs::path(host.pref_path) / "vs0/data/internal/livearea/default/sce_sys/icon0.png" };
     const auto default_icon{ fs::path(host.base_path) / "data/image/icon.png" };
 
+    if (fs::exists(default_fw_icon) || fs::exists(default_icon)) {
+        auto icon_path = fs::exists(default_fw_icon) ? default_fw_icon.string() : default_icon.string();
+        std::ifstream image_stream(icon_path, std::ios::binary | std::ios::ate);
+        const std::size_t fsize = image_stream.tellg();
+        buffer.resize(fsize);
+        image_stream.seekg(0, std::ios::beg);
+        image_stream.read(reinterpret_cast<char *>(buffer.data()), fsize);
+    }
+
+    return buffer;
+}
+
+static IconData load_app_icon(GuiState &gui, HostState &host, const std::string &app_path) {
+    IconData image;
+    vfs::FileBuffer buffer;
+
     const auto APP_INDEX = get_app_index(gui, app_path);
 
-    if (buffer.empty()) {
-        if (fs::exists(default_fw_icon) || fs::exists(default_icon)) {
-            LOG_INFO("Default icon found for title {}, [{}] in path {}.", APP_INDEX->title_id, APP_INDEX->title, app_path);
-            std::ifstream image_stream(fs::exists(default_fw_icon) ? default_fw_icon.string() : default_icon.string(), std::ios::binary | std::ios::ate);
-            const std::size_t fsize = image_stream.tellg();
-            buffer.resize(fsize);
-            image_stream.seekg(0, std::ios::beg);
-            image_stream.read(reinterpret_cast<char *>(&buffer[0]), fsize);
-        } else {
-            LOG_WARN("Default icon not found for title {}, [{}] in path {}.", APP_INDEX->title_id, APP_INDEX->title, app_path);
-            return;
+    if (!vfs::read_app_file(buffer, host.pref_path, app_path, "sce_sys/icon0.png")) {
+        buffer = init_default_icon(gui, host);
+        if (buffer.empty()) {
+            LOG_WARN("Default icon not found for title {}, [{}] in path {}.",
+                APP_INDEX->title_id, APP_INDEX->title, app_path);
+            return {};
+        } else
+            LOG_INFO("Default icon found for App {}, [{}] in path {}.", APP_INDEX->title_id, APP_INDEX->title, app_path);
+    }
+    image.data.reset(stbi_load_from_memory(
+        buffer.data(), static_cast<int>(buffer.size()),
+        &image.width, &image.height, nullptr, STBI_rgb_alpha));
+    if (!image.data || image.width != 128 || image.height != 128) {
+        LOG_ERROR("Invalid icon for title {}, [{}] in path {}.",
+            APP_INDEX->title_id, APP_INDEX->title, app_path);
+        return {};
+    }
+
+    return std::move(image);
+}
+
+void init_app_icon(GuiState &gui, HostState &host, const std::string &app_path) {
+    IconData data = load_app_icon(gui, host, app_path);
+
+    gui.app_selector.user_apps_icon[app_path].init(gui.imgui_state.get(), data.data.get(), data.width, data.height);
+}
+
+IconData::IconData()
+    : data(nullptr, stbi_image_free) {}
+
+void IconAsyncLoader::commit(GuiState &gui) {
+    std::lock_guard<std::mutex> lock(mutex);
+
+    for (const auto &pair : icon_data)
+        gui.app_selector.user_apps_icon[pair.first].init(gui.imgui_state.get(), pair.second.data.get(), pair.second.width, pair.second.height);
+
+    icon_data.clear();
+}
+
+IconAsyncLoader::IconAsyncLoader(GuiState &gui, HostState &host, const std::vector<gui::App> &app_list) {
+    // I don't feel comfortable passing app_list down to be iterated by thread.
+    // Methods like delete_app might mutate it, so I'd like to copy what I need now.
+    auto paths = [&app_list]() {
+        std::vector<std::string> copy(app_list.size());
+        std::transform(app_list.begin(), app_list.end(), copy.begin(), [](const auto &a) { return a.path; });
+
+        return copy;
+    };
+
+    quit = false;
+    thread = std::thread([&, paths = paths()]() {
+        for (const auto &path : paths) {
+            if (quit)
+                return;
+
+            // load the actual texture
+            IconData data = load_app_icon(gui, host, path);
+
+            // Duplicate code here from init_app_icon
+            {
+                std::lock_guard<std::mutex> lock(mutex);
+                icon_data[path] = std::move(data);
+            }
         }
-    }
-    stbi_uc *data = stbi_load_from_memory(&buffer[0], static_cast<int>(buffer.size()), &width, &height, nullptr, STBI_rgb_alpha);
-    if (!data || width != 128 || height != 128) {
-        LOG_ERROR("Invalid icon for title {}, [{}] in path {}.", APP_INDEX->title_id, APP_INDEX->title, app_path);
-        return;
-    }
-    auto &app_icon = app_path.find("NPXS") != std::string::npos ? gui.app_selector.sys_apps_icon : gui.app_selector.user_apps_icon;
-    app_icon[app_path].init(gui.imgui_state.get(), data, width, height);
-    stbi_image_free(data);
+    });
+}
+
+IconAsyncLoader::~IconAsyncLoader() {
+    quit = true;
+    thread.join();
 }
 
 void init_apps_icon(GuiState &gui, HostState &host, const std::vector<gui::App> &app_list) {
-    for (const auto &app : app_list)
-        init_app_icon(gui, host, app.path);
+    gui.app_selector.icon_async_loader.emplace(gui, host, app_list);
 }
 
 void init_app_background(GuiState &gui, HostState &host, const std::string &app_path) {
@@ -256,7 +311,8 @@ void init_app_background(GuiState &gui, HostState &host, const std::string &app_
     int32_t height = 0;
     vfs::FileBuffer buffer;
 
-    if (app_path.find("NPXS") != std::string::npos)
+    const auto is_sys = app_path.find("NPXS") != std::string::npos;
+    if (is_sys)
         vfs::read_file(VitaIoDevice::vs0, buffer, host.pref_path, "app/" + app_path + "/sce_sys/pic0.png");
     else
         vfs::read_app_file(buffer, host.pref_path, app_path, "sce_sys/pic0.png");
@@ -275,12 +331,112 @@ void init_app_background(GuiState &gui, HostState &host, const std::string &app_
     stbi_image_free(data);
 }
 
+static bool get_user_apps(GuiState &gui, HostState &host) {
+    const auto apps_cache_path{ fs::path(host.base_path) / "cache/apps.dat" };
+    fs::ifstream apps_cache(apps_cache_path, std::ios::in | std::ios::binary);
+    if (apps_cache.is_open()) {
+        gui.app_selector.user_apps.clear();
+        // Read size of apps list
+        size_t size;
+        apps_cache.read((char *)&size, sizeof(size));
+
+        // Check version of cache
+        size_t version_size;
+        apps_cache.read((char *)&version_size, sizeof(version_size));
+        std::vector<char> buffer(version_size); // dont trust std::string to hold buffer enough
+        apps_cache.read(buffer.data(), version_size);
+        const std::string versionInFile(buffer.begin(), buffer.end());
+        if (versionInFile != "1.02") {
+            LOG_WARN("Current version of cache: {}, is outdated, recreate it.", versionInFile);
+            return false;
+        }
+
+        // Read App info value
+        for (size_t a = 0; a < size; a++) {
+            auto read = [&apps_cache]() {
+                size_t size;
+
+                apps_cache.read((char *)&size, sizeof(size));
+
+                std::vector<char> buffer(size); // dont trust std::string to hold buffer enough
+                apps_cache.read(buffer.data(), size);
+
+                return std::string(buffer.begin(), buffer.end());
+            };
+
+            App app;
+
+            app.app_ver = read();
+            app.category = read();
+            app.content_id = read();
+            app.addcont = read();
+            app.savedata = read();
+            app.parental_level = read();
+            app.stitle = read();
+            app.title = read();
+            app.title_id = read();
+            app.path = read();
+
+            gui.app_selector.user_apps.push_back(app);
+        }
+
+        init_apps_icon(gui, host, gui.app_selector.user_apps);
+
+        return true;
+    }
+
+    return false;
+}
+
+void save_apps_cache(GuiState &gui, HostState &host) {
+    const auto cache_path{ fs::path(host.base_path) / "cache" };
+    if (!fs::exists(cache_path))
+        fs::create_directory(cache_path);
+
+    fs::ofstream apps_cache(cache_path / "apps.dat", std::ios::out | std::ios::binary);
+    if (apps_cache.is_open()) {
+        // Write Size of apps list
+        const auto size = gui.app_selector.user_apps.size();
+        apps_cache.write((char *)&size, sizeof(size));
+
+        // Write version of cache
+        const std::string version = "1.02";
+        const auto size_ver = version.length();
+        apps_cache.write((char *)&size_ver, sizeof(size_ver));
+        apps_cache.write(version.c_str(), size_ver);
+
+        // Write Apps list
+        for (const App &app : gui.app_selector.user_apps) {
+            auto write = [&apps_cache](const std::string &i) {
+                const auto size = i.length();
+
+                apps_cache.write((char *)&size, sizeof(size));
+                apps_cache.write(i.c_str(), size);
+            };
+
+            write(app.app_ver);
+            write(app.category);
+            write(app.content_id);
+            write(app.addcont);
+            write(app.savedata);
+            write(app.parental_level);
+            write(app.stitle);
+            write(app.title);
+            write(app.title_id);
+            write(app.path);
+        }
+        apps_cache.close();
+    }
+}
+
 void init_home(GuiState &gui, HostState &host) {
     const auto is_cmd = host.cfg.run_app_path || host.cfg.content_path;
     if (!gui.configuration_menu.settings_dialog && (host.cfg.load_app_list || !is_cmd)) {
-        get_user_apps_title(gui, host);
-        init_apps_icon(gui, host, gui.app_selector.user_apps);
+        if (!get_user_apps(gui, host))
+            init_user_apps(gui, host);
     }
+
+    get_time_apps(gui, host);
 
     if (!gui.users.empty() && (gui.users.find(host.cfg.user_id) != gui.users.end()) && (is_cmd || host.cfg.auto_user_login)) {
         init_user(gui, host, host.cfg.user_id);
@@ -305,9 +461,7 @@ void init_user_app(GuiState &gui, HostState &host, const std::string &app_path) 
     get_app_param(gui, host, app_path);
     init_app_icon(gui, host, app_path);
 
-    std::sort(gui.app_selector.user_apps.begin(), gui.app_selector.user_apps.end(), [](const App &lhs, const App &rhs) {
-        return string_utils::toupper(lhs.title) < string_utils::toupper(rhs.title);
-    });
+    gui.app_selector.is_app_list_sorted = false;
 }
 
 std::map<std::string, ImGui_Texture>::const_iterator get_app_icon(GuiState &gui, const std::string &app_path) {
@@ -319,8 +473,8 @@ std::map<std::string, ImGui_Texture>::const_iterator get_app_icon(GuiState &gui,
     return app_icon;
 }
 
-std::vector<App>::const_iterator get_app_index(GuiState &gui, const std::string &app_path) {
-    const auto &app_type = app_path.find("NPXS") != std::string::npos ? gui.app_selector.sys_apps : gui.app_selector.user_apps;
+std::vector<App>::iterator get_app_index(GuiState &gui, const std::string &app_path) {
+    auto &app_type = app_path.find("NPXS") != std::string::npos ? gui.app_selector.sys_apps : gui.app_selector.user_apps;
     const auto app_index = std::find_if(app_type.begin(), app_type.end(), [&](const App &a) {
         return a.path == app_path;
     });
@@ -334,10 +488,10 @@ void get_app_param(GuiState &gui, HostState &host, const std::string &app_path) 
     if (vfs::read_app_file(param, host.pref_path, app_path, "sce_sys/param.sfo")) {
         get_param_info(host, param);
     } else {
-        host.app_short_title = host.app_title = host.app_title_id = host.app_path; // Use app path as TitleID, Short title and Title
+        host.app_addcont = host.app_savedata = host.app_short_title = host.app_title = host.app_title_id = host.app_path; // Use app path as TitleID, addcont, Savedata, Short title and Title
         host.app_version = host.app_category = host.app_parental_level = "N/A";
     }
-    gui.app_selector.user_apps.push_back({ host.app_version, host.app_category, host.app_content_id, host.app_parental_level, host.app_short_title, host.app_title, host.app_title_id, host.app_path });
+    gui.app_selector.user_apps.push_back({ host.app_version, host.app_category, host.app_content_id, host.app_addcont, host.app_savedata, host.app_parental_level, host.app_short_title, host.app_title, host.app_title_id, host.app_path });
 }
 
 void get_param_info(HostState &host, const vfs::FileBuffer &param) {
@@ -348,6 +502,10 @@ void get_param_info(HostState &host, const vfs::FileBuffer &param) {
         host.app_version.erase(host.app_version.begin());
     sfo::get_data_by_key(host.app_category, sfo_handle, "CATEGORY");
     sfo::get_data_by_key(host.app_content_id, sfo_handle, "CONTENT_ID");
+    if (!sfo::get_data_by_key(host.app_addcont, sfo_handle, "INSTALL_DIR_ADDCONT"))
+        sfo::get_data_by_key(host.app_addcont, sfo_handle, "TITLE_ID");
+    if (!sfo::get_data_by_key(host.app_savedata, sfo_handle, "INSTALL_DIR_SAVEDATA"))
+        sfo::get_data_by_key(host.app_savedata, sfo_handle, "TITLE_ID");
     sfo::get_data_by_key(host.app_parental_level, sfo_handle, "PARENTAL_LEVEL");
     if (!sfo::get_data_by_key(host.app_short_title, sfo_handle, fmt::format("STITLE_{:0>2d}", host.cfg.sys_lang)))
         sfo::get_data_by_key(host.app_short_title, sfo_handle, "STITLE");
@@ -401,8 +559,12 @@ void get_sys_apps_title(GuiState &gui, HostState &host) {
             else
                 host.app_short_title = host.app_title = "Content Manager";
         }
-        gui.app_selector.sys_apps.push_back({ host.app_version, host.app_category, {}, {}, host.app_short_title, host.app_title, host.app_title_id, app });
+        gui.app_selector.sys_apps.push_back({ host.app_version, host.app_category, {}, {}, {}, {}, host.app_short_title, host.app_title, host.app_title_id, app });
     }
+
+    std::sort(gui.app_selector.sys_apps.begin(), gui.app_selector.sys_apps.end(), [](const App &lhs, const App &rhs) {
+        return string_utils::toupper(lhs.title) < string_utils::toupper(rhs.title);
+    });
 }
 
 static const char *const ymonth[] = {
@@ -502,6 +664,11 @@ void init(GuiState &gui, HostState &host) {
 void draw_begin(GuiState &gui, HostState &host) {
     ImGui_ImplSdl_NewFrame(gui.imgui_state.get());
     host.renderer_focused = !ImGui::GetIO().WantCaptureMouse;
+
+    // async loading, renderer texture creation needs to be synchronous
+    // cant bind opengl context outside main thread on macos now
+    if (gui.app_selector.icon_async_loader)
+        gui.app_selector.icon_async_loader->commit(gui);
 }
 
 void draw_end(GuiState &gui, SDL_Window *window) {
@@ -519,7 +686,7 @@ void draw_live_area(GuiState &gui, HostState &host) {
     if (gui.live_area.app_selector)
         draw_app_selector(gui, host);
 
-    if (gui.live_area.information_bar)
+    if ((host.cfg.show_info_bar || !host.display.imgui_render || !gui.live_area.app_selector) && gui.live_area.information_bar)
         draw_information_bar(gui, host);
 
     if (gui.live_area.live_area_screen)
@@ -560,6 +727,9 @@ void draw_live_area(GuiState &gui, HostState &host) {
 void draw_ui(GuiState &gui, HostState &host) {
     ImGui::PushFont(gui.vita_font);
     draw_main_menu_bar(gui, host);
+    if (gui.controls_menu.controllers_dialog)
+        draw_controllers_dialog(gui, host);
+
     ImGui::PopFont();
 
     ImGui::PushFont(gui.monospaced_font);

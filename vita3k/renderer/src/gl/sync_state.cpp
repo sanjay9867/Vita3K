@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <renderer/functions.h>
 #include <renderer/profile.h>
 #include <renderer/types.h>
@@ -299,8 +316,15 @@ void sync_texture(GLContext &context, MemState &mem, std::size_t index, SceGxmTe
         return;
     }
 
+    const size_t texture_size = renderer::texture::texture_size(texture);
+    if (!is_valid_addr_range(mem, texture.data_addr << 2, (texture.data_addr << 2) + texture_size)) {
+        LOG_WARN("Texture has freed data.");
+        return;
+    }
+
     const SceGxmTextureFormat format = gxm::get_format(&texture);
-    if (gxm::is_paletted_format(format) && texture.palette_addr == 0) {
+    const SceGxmTextureBaseFormat base_format = gxm::get_base_format(format);
+    if (gxm::is_paletted_format(base_format) && texture.palette_addr == 0) {
         LOG_WARN("Ignoring null palette texture");
         return;
     }

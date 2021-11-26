@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,12 +17,16 @@
 
 #pragma once
 
-#include <host/state.h>
 #include <util/types.h>
 
 #define SCE_TOUCH_MAX_REPORT 8
 
 struct SDL_TouchFingerEvent;
+
+enum SceTouchSamplingState {
+    SCE_TOUCH_SAMPLING_STATE_STOP,
+    SCE_TOUCH_SAMPLING_STATE_START
+};
 
 enum SceTouchErrorCode {
     SCE_TOUCH_ERROR_INVALID_ARG = 0x80350001,
@@ -65,7 +69,3 @@ struct SceTouchData {
     SceUInt32 reportNum;
     SceTouchReport report[SCE_TOUCH_MAX_REPORT];
 };
-
-int handle_touch_event(SDL_TouchFingerEvent &finger);
-int toggle_touchscreen();
-int peek_touch(const HostState &host, const SceUInt32 &port, SceTouchData *pData, SceUInt32 count);

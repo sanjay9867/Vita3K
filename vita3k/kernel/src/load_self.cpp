@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -33,14 +33,14 @@
 #include <sce-elf-defs.h>
 #undef SCE_ELF_DEFS_TARGET
 // clang-format on
-#include <self.h>
 #include <miniz.h>
+#include <self.h>
 
 #include <cassert>
 #include <cstring>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <fstream>
 
 #define ET_SCE_EXEC 0xFE00
 

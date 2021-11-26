@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -134,15 +134,15 @@ bool init(IOState &io, const fs::path &base_path, const fs::path &pref_path, boo
 }
 
 void init_device_paths(IOState &io) {
-    io.device_paths.savedata0 = "user/" + io.user_id + "/savedata/" + io.title_id;
+    io.device_paths.savedata0 = "user/" + io.user_id + "/savedata/" + io.savedata;
     io.device_paths.app0 = "app/" + io.app_path;
-    io.device_paths.addcont0 = "addcont/" + io.title_id;
+    io.device_paths.addcont0 = "addcont/" + io.addcont;
 }
 
 bool init_savedata_app_path(IOState &io, const fs::path &pref_path) {
     const fs::path user_id_path{ pref_path / (+VitaIoDevice::ux0)._to_string() / "user" / io.user_id };
     const fs::path savedata_path{ user_id_path / "savedata" };
-    const fs::path savedata_game_path{ savedata_path / io.title_id };
+    const fs::path savedata_game_path{ savedata_path / io.savedata };
 
     if (!fs::exists(user_id_path))
         fs::create_directory(user_id_path);
@@ -192,6 +192,12 @@ fs::path find_in_cache(IOState &io, const std::string &system_path) {
 
 std::string translate_path(const char *path, VitaIoDevice &device, const IOState::DevicePaths &device_paths) {
     auto relative_path = device::remove_duplicate_device(path, device);
+
+    // replace invalid slashes with proper forward slash
+    string_utils::replace(relative_path, "\\", "/");
+    string_utils::replace(relative_path, "/./", "/");
+    string_utils::replace(relative_path, "//", "/");
+    // TODO: Handle dot-dot paths
 
     switch (device) {
     case +VitaIoDevice::savedata0: // Redirect savedata0: to ux0:user/00/savedata/<title_id>
@@ -529,11 +535,8 @@ int stat_file(IOState &io, const char *file, SceIoStat *statp, const std::wstrin
 
     if (fs::is_regular_file(file_path)) {
         statp->st_size = fs::file_size(file_path);
-
-        if (fd != invalid_fd) {
-            statp->st_attr = SCE_SO_IFREG;
-            statp->st_mode |= SCE_S_IFREG;
-        }
+        statp->st_attr = SCE_SO_IFREG;
+        statp->st_mode |= SCE_S_IFREG;
     }
     if (fs::is_directory(file_path)) {
         statp->st_attr = SCE_SO_IFDIR;

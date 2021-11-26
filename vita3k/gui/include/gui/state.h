@@ -28,8 +28,16 @@
 
 #include <glutil/object.h>
 
+#include <atomic>
+#include <mutex>
+#include <optional>
 #include <queue>
+#include <thread>
+#include <unordered_map>
 #include <vector>
+
+struct GuiState;
+struct HostState;
 
 namespace gui {
 
@@ -43,15 +51,26 @@ enum SortState {
     DESCENDANT
 };
 
+enum SortType {
+    APP_VER,
+    CATEGORY,
+    LAST_TIME,
+    TITLE,
+    TITLE_ID
+};
+
 struct App {
     std::string app_ver;
     std::string category;
     std::string content_id;
+    std::string addcont;
+    std::string savedata;
     std::string parental_level;
     std::string stitle;
     std::string title;
     std::string title_id;
     std::string path;
+    time_t last_time;
 };
 
 struct AppInfo {
@@ -60,17 +79,38 @@ struct AppInfo {
     size_t size;
 };
 
+struct IconData {
+    int32_t width = 0;
+    int32_t height = 0;
+
+    std::unique_ptr<void, void (*)(void *)> data;
+
+    IconData();
+};
+
+struct IconAsyncLoader {
+    std::mutex mutex;
+
+    std::unordered_map<std::string, IconData> icon_data;
+
+    std::thread thread;
+    std::atomic_bool quit = false;
+
+    void commit(GuiState &gui);
+
+    IconAsyncLoader(GuiState &gui, HostState &host, const std::vector<gui::App> &app_list);
+    ~IconAsyncLoader();
+};
+
 struct AppsSelector {
     std::vector<App> sys_apps;
     std::vector<App> user_apps;
     AppInfo app_info;
+    std::optional<IconAsyncLoader> icon_async_loader;
     std::map<std::string, ImGui_Texture> sys_apps_icon;
     std::map<std::string, ImGui_Texture> user_apps_icon;
     bool is_app_list_sorted{ false };
-    SortState title_id_sort_state = NOT_SORTED;
-    SortState app_ver_sort_state = NOT_SORTED;
-    SortState category_sort_state = NOT_SORTED;
-    SortState title_sort_state = NOT_SORTED;
+    std::map<SortType, SortState> app_list_sorted;
     SelectorState state = SELECT_APP;
 };
 
@@ -115,6 +155,7 @@ struct ConfigurationMenuState {
 
 struct ControlMenuState {
     bool controls_dialog = false;
+    bool controllers_dialog = false;
 };
 
 struct HelpMenuState {
@@ -139,19 +180,20 @@ enum DateFormat {
 
 struct User {
     std::string id;
-    std::string name;
-    DateFormat date_format;
-    bool clock_12_hour;
-    std::string avatar;
-    std::string theme_id;
-    bool use_theme_bg;
-    std::string start_type;
+    std::string name = "Vita3K";
+    DateFormat date_format = MM_DD_YYYY;
+    bool clock_12_hour = true;
+    std::string avatar = "default";
+    gui::SortType sort_apps_type = gui::TITLE;
+    gui::SortState sort_apps_state = gui::ASCENDANT;
+    std::string theme_id = "default";
+    bool use_theme_bg = true;
+    std::string start_type = "default";
     std::string start_path;
     std::vector<std::string> backgrounds;
 };
 
 struct Lang {
-    std::string user_lang;
     std::map<std::string, std::string> main_menubar;
     std::map<std::string, std::string> app_context;
     std::map<std::string, std::string> game_data;
@@ -166,6 +208,12 @@ struct Lang {
         std::map<std::string, std::string> common;
     };
     Common common;
+};
+
+struct TimeApp {
+    std::string app;
+    time_t last_time_used;
+    int64_t time_used;
 };
 
 struct GuiState {
@@ -208,6 +256,8 @@ struct GuiState {
 
     std::vector<std::string> apps_list_opened;
     int32_t current_app_selected = -1;
+
+    std::map<std::string, std::vector<TimeApp>> time_apps;
 
     std::uint64_t current_theme_bg;
     std::map<std::string, std::map<std::string, ImGui_Texture>> themes_preview;

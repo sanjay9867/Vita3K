@@ -32,6 +32,7 @@
 #include <nids/types.h>
 #include <np/state.h>
 #include <renderer/state.h>
+#include <touch/state.h>
 
 // The GDB Stub requires winsock.h on windows (included in above headers). Keep it here to prevent build errors.
 #include <gdbstub/state.h>
@@ -56,6 +57,8 @@ struct HostState {
     std::string app_version;
     std::string app_category;
     std::string app_content_id;
+    std::string app_addcont;
+    std::string app_savedata;
     std::string app_parental_level;
     std::string app_short_title;
     std::string app_title;
@@ -88,6 +91,7 @@ struct HostState {
     SceFVector2 viewport_size = { 0, 0 };
     MemState mem;
     CtrlState ctrl;
+    TouchState touch;
     KernelState kernel;
     AudioState audio;
     GxmState gxm;

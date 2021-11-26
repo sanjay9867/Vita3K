@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -30,6 +30,7 @@ Address alloc(MemState &state, size_t size, const char *name, unsigned int align
 bool add_write_protect(MemState &state, Address addr, const size_t size, WriteProtectCallback callback);
 bool remove_write_protect(MemState &state, Address addr);
 bool is_valid_addr(const MemState &state, Address addr);
+bool is_valid_addr_range(const MemState &state, Address start, Address end);
 bool handle_access_violation(MemState &state, uint8_t *addr, bool write) noexcept;
 Block alloc_block(MemState &mem, size_t size, const char *name);
 Address alloc_at(MemState &state, Address address, size_t size, const char *name);

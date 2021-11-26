@@ -304,7 +304,7 @@ static int init_texture_base(const char *export_name, SceGxmTexture *texture, Pt
     }
     // data can be empty to be filled out later.
 
-    texture->mip_count = std::min<std::uint32_t>(0, mipCount - 1);
+    texture->mip_count = std::min<std::uint32_t>(15, mipCount - 1);
     texture->format0 = (tex_format & 0x80000000) >> 31;
     texture->lod_bias = 31;
 
@@ -341,10 +341,6 @@ static int init_texture_base(const char *export_name, SceGxmTexture *texture, Pt
 }
 
 EXPORT(int, _sceGxmBeginScene) {
-    return UNIMPLEMENTED();
-}
-
-EXPORT(int, _sceGxmMidSceneFlush) {
     return UNIMPLEMENTED();
 }
 
@@ -432,8 +428,25 @@ static void gxmContextStateRestore(renderer::State &state, MemState &mem, SceGxm
     renderer::set_stencil_ref(state, context->renderer.get(), true, context->state.front_stencil.ref);
     renderer::set_stencil_ref(state, context->renderer.get(), false, context->state.back_stencil.ref);
 
-    if (context->state.vertex_program)
+    if (context->state.vertex_program) {
         renderer::set_program(state, context->renderer.get(), context->state.vertex_program, false);
+
+        const SceGxmVertexProgram &gxm_vertex_program = *context->state.vertex_program.get(mem);
+        const SceGxmProgram &vertex_program_gxp = *gxm_vertex_program.program.get(mem);
+
+        const auto vert_paramters = gxp::program_parameters(vertex_program_gxp);
+
+        for (uint32_t i = 0; i < vertex_program_gxp.parameter_count; ++i) {
+            const auto parameter = vert_paramters[i];
+            if (parameter.category == SCE_GXM_PARAMETER_CATEGORY_SAMPLER) {
+                const auto index = parameter.resource_index + SCE_GXM_MAX_TEXTURE_UNITS;
+
+                if (context->state.textures[index].data_addr != 0) {
+                    renderer::set_texture(state, context->renderer.get(), index, context->state.textures[index]);
+                }
+            }
+        }
+    }
 
     // The uniform buffer, vertex stream will be uploaded later, for now only need to resync de textures
     if (context->state.fragment_program) {
@@ -449,8 +462,8 @@ static void gxmContextStateRestore(renderer::State &state, MemState &mem, SceGxm
             if (parameter.category == SCE_GXM_PARAMETER_CATEGORY_SAMPLER) {
                 const auto index = parameter.resource_index;
 
-                if (context->state.fragment_textures[index].data_addr != 0) {
-                    renderer::set_fragment_texture(state, context->renderer.get(), index, context->state.fragment_textures[index]);
+                if (context->state.textures[index].data_addr != 0) {
+                    renderer::set_texture(state, context->renderer.get(), index, context->state.textures[index]);
                 }
             }
         }
@@ -514,7 +527,7 @@ EXPORT(int, sceGxmBeginCommandList, SceGxmContext *deferredContext) {
 
     // Begin the command list by white washing previous command list, and restoring deferred state
     renderer::reset_command_list(deferredContext->renderer->command_list);
-    gxmContextStateRestore(*host.renderer, host.mem, deferredContext, true);
+    gxmContextStateRestore(*host.renderer, host.mem, deferredContext, false);
 
     deferredContext->state.active = true;
 
@@ -673,7 +686,7 @@ EXPORT(int, sceGxmColorSurfaceInit, SceGxmColorSurface *surface, SceGxmColorForm
     surface->outputRegisterSize = outputRegisterSize;
 
     // Create background object, for here don't return an error
-    if (init_texture_base(export_name, &surface->backgroundTex, Ptr<void>(0), SCE_GXM_TEXTURE_FORMAT_A8R8G8B8, surface->width, surface->height, 0, SCE_GXM_TEXTURE_LINEAR) != SCE_KERNEL_OK) {
+    if (init_texture_base(export_name, &surface->backgroundTex, Ptr<void>(0), SCE_GXM_TEXTURE_FORMAT_A8R8G8B8, surface->width, surface->height, 1, SCE_GXM_TEXTURE_LINEAR) != SCE_KERNEL_OK) {
         LOG_WARN("Unable to initialize background object control texture!");
     }
 
@@ -1017,10 +1030,8 @@ static void gxmSetUniformBuffers(renderer::State &state, SceGxmContext *context,
             continue;
         }
 
-        // Shift all buffer by 1.
-        // The ideal is: default uniform buffer block has the binding of 14. Not really ideal, so i move it to 0, and buffer 0 to 1, etc..
         std::uint32_t bytes_to_copy = sizes.at(i) * 4;
-        std::uint8_t **dest = renderer::set_uniform_buffer(state, context->renderer.get(), !program.is_fragment(), static_cast<int>((i + 1) % SCE_GXM_REAL_MAX_UNIFORM_BUFFER), bytes_to_copy);
+        std::uint8_t **dest = renderer::set_uniform_buffer(state, context->renderer.get(), !program.is_fragment(), i, bytes_to_copy);
 
         if (dest) {
             // Calculate the number of bytes
@@ -1126,12 +1137,23 @@ static int gxmDrawElementGeneral(HostState &host, const char *export_name, const
     if (context->last_precomputed) {
         // Need to re-set the data
         const auto frag_paramters = gxp::program_parameters(fragment_program_gxp);
-        auto &textures = context->state.fragment_textures;
+        const auto vert_paramters = gxp::program_parameters(vertex_program_gxp);
+
+        auto &textures = context->state.textures;
+
         for (uint32_t i = 0; i < fragment_program_gxp.parameter_count; ++i) {
             const auto parameter = frag_paramters[i];
             if (parameter.category == SCE_GXM_PARAMETER_CATEGORY_SAMPLER) {
                 const auto index = parameter.resource_index;
-                renderer::set_fragment_texture(*host.renderer, context->renderer.get(), index, textures[index]);
+                renderer::set_texture(*host.renderer, context->renderer.get(), index, textures[index]);
+            }
+        }
+
+        for (uint32_t i = 0; i < vertex_program_gxp.parameter_count; ++i) {
+            const auto parameter = vert_paramters[i];
+            if (parameter.category == SCE_GXM_PARAMETER_CATEGORY_SAMPLER) {
+                const auto index = parameter.resource_index + SCE_GXM_MAX_TEXTURE_UNITS;
+                renderer::set_texture(*host.renderer, context->renderer.get(), index, textures[index]);
             }
         }
 
@@ -1277,7 +1299,7 @@ EXPORT(int, sceGxmDrawPrecomputed, SceGxmContext *context, SceGxmPrecomputedDraw
         const auto parameter = frag_paramters[i];
         if (parameter.category == SCE_GXM_PARAMETER_CATEGORY_SAMPLER) {
             const auto index = parameter.resource_index;
-            renderer::set_fragment_texture(*host.renderer, context->renderer.get(), index, textures[index]);
+            renderer::set_texture(*host.renderer, context->renderer.get(), index, textures[index]);
         }
     }
 
@@ -1379,9 +1401,8 @@ EXPORT(int, sceGxmEndScene, SceGxmContext *context, Ptr<SceGxmNotification> vert
     renderer::sync_surface_data(*host.renderer, context->renderer.get());
 
     // Add NOP for SceGxmFinish
-    context->renderer->render_finish_status = renderer::CommandErrorCodePending;
     renderer::add_command(context->renderer.get(), renderer::CommandOpcode::Nop, &context->renderer->render_finish_status,
-        (int)0);
+        ++host.renderer->last_scene_id);
 
     if (vertexNotification) {
         renderer::add_command(context->renderer.get(), renderer::CommandOpcode::SignalNotification,
@@ -1684,12 +1705,14 @@ EXPORT(int, sceGxmMapVertexUsseMemory, Ptr<void> base, uint32_t size, uint32_t *
     return 0;
 }
 
-EXPORT(int, sceGxmMidSceneFlush, SceGxmContext *immediateContext, uint32_t flags, SceGxmSyncObject *vertexSyncObject, const SceGxmNotification *vertexNotification) {
+EXPORT(int, sceGxmMidSceneFlush, SceGxmContext *immediateContext, uint32_t flags, SceGxmSyncObject *vertexSyncObject, const Ptr<SceGxmNotification> vertexNotification) {
+    STUBBED("STUB");
+
     if (!immediateContext) {
         return RET_ERROR(SCE_GXM_ERROR_INVALID_POINTER);
     }
 
-    if (flags & 0xFFFFFFFE) {
+    if ((flags & 0xFFFFFFFE) || (immediateContext->state.type != SCE_GXM_CONTEXT_TYPE_IMMEDIATE)) {
         return RET_ERROR(SCE_GXM_ERROR_INVALID_VALUE);
     }
 
@@ -1697,17 +1720,26 @@ EXPORT(int, sceGxmMidSceneFlush, SceGxmContext *immediateContext, uint32_t flags
         return RET_ERROR(SCE_GXM_ERROR_INVALID_POINTER);
     }
 
-    return UNIMPLEMENTED();
+    if (vertexNotification) {
+        volatile uint32_t *val = vertexNotification.get(host.mem)->address.get(host.mem);
+        *val = vertexNotification.get(host.mem)->value;
+    }
+
+    return 0;
 }
 
-EXPORT(int, sceGxmNotificationWait, const SceGxmNotification *notification) {
+EXPORT(int, _sceGxmMidSceneFlush, SceGxmContext *immediateContext, uint32_t flags, SceGxmSyncObject *vertexSyncObject, const Ptr<SceGxmNotification> vertexNotification) {
+    return CALL_EXPORT(sceGxmMidSceneFlush, immediateContext, flags, vertexSyncObject, vertexNotification);
+}
+
+EXPORT(int, sceGxmNotificationWait, const Ptr<SceGxmNotification> notification) {
     if (!notification) {
         return RET_ERROR(SCE_GXM_ERROR_INVALID_POINTER);
     }
 
     // TODO: This is so horrible
-    volatile std::uint32_t *value = notification->address.get(host.mem);
-    while (*value != notification->value) {
+    volatile std::uint32_t *value = notification.get(host.mem)->address.get(host.mem);
+    while (*value != notification.get(host.mem)->value) {
     }
 
     return 0;
@@ -2470,10 +2502,10 @@ EXPORT(int, sceGxmSetFragmentTexture, SceGxmContext *context, uint32_t textureIn
         return RET_ERROR(SCE_GXM_ERROR_INVALID_VALUE);
     }
 
-    context->state.fragment_textures[textureIndex] = *texture;
+    context->state.textures[textureIndex] = *texture;
 
     if (context->alloc_space)
-        renderer::set_fragment_texture(*host.renderer, context->renderer.get(), textureIndex, *texture);
+        renderer::set_texture(*host.renderer, context->renderer.get(), textureIndex, *texture);
 
     return 0;
 }
@@ -2808,15 +2840,21 @@ EXPORT(int, sceGxmSetVertexStream, SceGxmContext *context, uint32_t streamIndex,
 }
 
 EXPORT(int, sceGxmSetVertexTexture, SceGxmContext *context, uint32_t textureIndex, const SceGxmTexture *texture) {
-    if (!context || !texture) {
+    if (!context || !texture)
         return RET_ERROR(SCE_GXM_ERROR_INVALID_POINTER);
-    }
 
     if (textureIndex > (SCE_GXM_MAX_TEXTURE_UNITS - 1)) {
         return RET_ERROR(SCE_GXM_ERROR_INVALID_VALUE);
     }
 
-    return UNIMPLEMENTED();
+    // Vertex texture arrays start at MAX UNITS value, so is shader binding.
+    textureIndex += SCE_GXM_MAX_TEXTURE_UNITS;
+    context->state.textures[textureIndex] = *texture;
+
+    if (context->alloc_space)
+        renderer::set_texture(*host.renderer, context->renderer.get(), textureIndex, *texture);
+
+    return 0;
 }
 
 EXPORT(int, sceGxmSetVertexUniformBuffer, SceGxmContext *context, uint32_t bufferIndex, Ptr<const void> bufferData) {
@@ -3311,9 +3349,9 @@ EXPORT(int, sceGxmTextureGetNormalizeMode, const SceGxmTexture *texture) {
 }
 
 EXPORT(Ptr<void>, sceGxmTextureGetPalette, const SceGxmTexture *texture) {
-    assert(texture);
-    assert(gxm::is_paletted_format(gxm::get_format(texture)));
-    return Ptr<void>(texture->palette_addr << 6);
+    const auto base_format = gxm::get_base_format(gxm::get_format(texture));
+
+    return gxm::is_paletted_format(base_format) ? Ptr<void>(texture->palette_addr << 6) : Ptr<void>();
 }
 
 EXPORT(uint32_t, sceGxmTextureGetStride, const SceGxmTexture *texture) {
@@ -3465,12 +3503,14 @@ EXPORT(int, sceGxmTextureSetData, SceGxmTexture *texture, Ptr<const void> data) 
 }
 
 EXPORT(int, sceGxmTextureSetFormat, SceGxmTexture *texture, SceGxmTextureFormat texFormat) {
-    STUBBED("FAST");
     if (!texture) {
         return RET_ERROR(SCE_GXM_ERROR_INVALID_POINTER);
     }
+
     texture->base_format = (texFormat & 0x1F000000) >> 24;
     texture->swizzle_format = (texFormat & 0x7000) >> 12;
+    texture->format0 = (texFormat & 0x80000000) >> 31;
+
     return SCE_KERNEL_OK;
 }
 
@@ -3775,7 +3815,6 @@ EXPORT(int, sceGxmWaitEvent) {
 }
 
 BRIDGE_IMPL(_sceGxmBeginScene)
-BRIDGE_IMPL(_sceGxmMidSceneFlush)
 BRIDGE_IMPL(_sceGxmProgramFindParameterBySemantic)
 BRIDGE_IMPL(_sceGxmProgramParameterGetSemantic)
 BRIDGE_IMPL(_sceGxmSetVertexTexture)
@@ -3851,6 +3890,7 @@ BRIDGE_IMPL(sceGxmMapFragmentUsseMemory)
 BRIDGE_IMPL(sceGxmMapMemory)
 BRIDGE_IMPL(sceGxmMapVertexUsseMemory)
 BRIDGE_IMPL(sceGxmMidSceneFlush)
+BRIDGE_IMPL(_sceGxmMidSceneFlush)
 BRIDGE_IMPL(sceGxmNotificationWait)
 BRIDGE_IMPL(sceGxmPadHeartbeat)
 BRIDGE_IMPL(sceGxmPadTriggerGpuPaTrace)

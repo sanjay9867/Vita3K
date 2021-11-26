@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@ EXPORT(int, sceNgsRackGetRequiredMemorySizeInternal) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceNgsRackGetVoiceHandleInternal6) {
+EXPORT(int, sceNgsRackGetVoiceHandleInternal) {
     return UNIMPLEMENTED();
 }
 
@@ -271,7 +271,7 @@ BRIDGE_IMPL(sceNgsModuleGetPresetInternal)
 BRIDGE_IMPL(sceNgsPatchCreateRoutingInternal)
 BRIDGE_IMPL(sceNgsPatchRemoveRoutingInternal)
 BRIDGE_IMPL(sceNgsRackGetRequiredMemorySizeInternal)
-BRIDGE_IMPL(sceNgsRackGetVoiceHandleInternal6)
+BRIDGE_IMPL(sceNgsRackGetVoiceHandleInternal)
 BRIDGE_IMPL(sceNgsRackInitInternal)
 BRIDGE_IMPL(sceNgsRackReleaseInternal)
 BRIDGE_IMPL(sceNgsRackSetParamErrorCallbackInternal)

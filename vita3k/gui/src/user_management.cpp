@@ -71,54 +71,51 @@ void get_users_list(GuiState &gui, HostState &host) {
             if (fs::is_directory(path) && user_xml.load_file(((path / "user.xml").c_str()))) {
                 const auto user_child = user_xml.child("user");
 
-                // Load user settings
+                // Load user id
                 std::string user_id;
                 if (!user_child.attribute("id").empty())
                     user_id = user_child.attribute("id").as_string();
                 else
                     user_id = path.path().stem().string();
 
+                // Load user name
                 auto &user = gui.users[user_id];
                 user.id = user_id;
                 if (!user_child.attribute("name").empty())
                     user.name = user_child.attribute("name").as_string();
-                else
-                    user.name = "vita3K";
 
+                // Load date format setting
                 if (!user_child.attribute("date-format").empty())
                     user.date_format = DateFormat(user_child.attribute("date-format").as_int());
-                else
-                    user.date_format = DateFormat::MM_DD_YYYY;
 
+                // Load clock setting
                 if (!user_child.attribute("clock-12-hour").empty())
                     user.clock_12_hour = user_child.attribute("clock-12-hour").as_bool();
-                else
-                    user.clock_12_hour = true;
 
+                // Load Avatar
                 if (!user_child.child("avatar").text().empty())
                     user.avatar = user_child.child("avatar").text().as_string();
-                else
-                    user.avatar = "default";
                 init_avatar(gui, host, user.id, user.avatar);
+
+                // Load sort Apps list settings
+                auto sort_apps_list = user_child.child("sort-apps-list");
+                if (!sort_apps_list.empty()) {
+                    user.sort_apps_type = SortType(sort_apps_list.attribute("type").as_uint());
+                    user.sort_apps_state = SortState(sort_apps_list.attribute("state").as_uint());
+                }
 
                 // Load theme settings
                 auto theme = user_child.child("theme");
                 if (!theme.attribute("use-background").empty())
                     user.use_theme_bg = theme.attribute("use-background").as_bool();
-                else
-                    user.use_theme_bg = true;
 
                 if (!theme.child("content-id").text().empty())
                     user.theme_id = theme.child("content-id").text().as_string();
-                else
-                    user.theme_id = "default";
 
                 // Load start screen settings
                 auto start = user_child.child("start-screen");
                 if (!start.attribute("type").empty())
                     user.start_type = start.attribute("type").as_string();
-                else
-                    user.start_type = "default";
 
                 if (!start.child("path").text().empty())
                     user.start_path = start.child("path").text().as_string();
@@ -151,6 +148,11 @@ void save_user(GuiState &gui, HostState &host, const std::string &user_id) {
     user_child.append_attribute("clock-12-hour") = user.clock_12_hour;
     user_child.append_child("avatar").append_child(pugi::node_pcdata).set_value(user.avatar.c_str());
 
+    // Save sort Apps list settings
+    auto sort_apps_list = user_child.append_child("sort-apps-list");
+    sort_apps_list.append_attribute("type") = user.sort_apps_type;
+    sort_apps_list.append_attribute("state") = user.sort_apps_state;
+
     // Save theme settings
     auto theme = user_child.append_child("theme");
     theme.append_attribute("use-background") = user.use_theme_bg;
@@ -180,6 +182,7 @@ void init_user(GuiState &gui, HostState &host, const std::string &user_id) {
     }
     init_theme(gui, host, gui.users[user_id].theme_id);
     init_notice_info(gui, host);
+    init_last_time_apps(gui, host);
 }
 
 void open_user(GuiState &gui, HostState &host) {
@@ -211,14 +214,6 @@ void clear_temp(GuiState &gui) {
     user_id.clear();
 }
 
-#ifdef _WIN32
-static const char OS_PREFIX[] = "start ";
-#elif __APPLE__
-static const char OS_PREFIX[] = "open ";
-#else
-static const char OS_PREFIX[] = "xdg-open ";
-#endif
-
 void draw_user_management(GuiState &gui, HostState &host) {
     const auto display_size = ImGui::GetIO().DisplaySize;
     const auto RES_SCALE = ImVec2(display_size.x / host.res_width_dpi_scale, display_size.y / host.res_height_dpi_scale);
@@ -235,7 +230,7 @@ void draw_user_management(GuiState &gui, HostState &host) {
     if (!host.display.imgui_render || ImGui::IsWindowHovered(ImGuiHoveredFlags_RootAndChildWindows))
         gui.live_area.information_bar = true;
 
-    ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0.f, INFORMATION_BAR_HEIGHT), display_size, IM_COL32(10.f, 50.f, 140.f, 255.f), 0.f, ImDrawCornerFlags_All);
+    ImGui::GetBackgroundDrawList()->AddRectFilled(ImVec2(0.f, INFORMATION_BAR_HEIGHT), display_size, IM_COL32(10.f, 50.f, 140.f, 255.f), 0.f, ImDrawFlags_RoundCornersAll);
 
     const auto user_path{ fs::path(host.pref_path) / "ux0/user" };
     const auto AVATAR_SIZE = ImVec2(128 * SCALE.x, 128 * SCALE.y);
@@ -310,7 +305,7 @@ void draw_user_management(GuiState &gui, HostState &host) {
             ImGui::SetCursorPos(ImVec2(USER_POS.x, USER_POS.y - BUTTON_SIZE.y));
             if (ImGui::Button(EDIT_USER_STR.c_str(), ImVec2(AVATAR_SIZE.x, BUTTON_SIZE.y))) {
                 user_id = user.first;
-                gui.users_avatar["temp"] = gui.users_avatar[user.first];
+                gui.users_avatar["temp"] = std::move(gui.users_avatar[user.first]);
                 temp = gui.users[user.first];
                 menu = "edit";
             }
@@ -335,7 +330,7 @@ void draw_user_management(GuiState &gui, HostState &host) {
             ImGui::PopStyleColor();
             if (ImGui::BeginPopupContextItem("##user_context_menu")) {
                 if (ImGui::MenuItem("Open User Folder"))
-                    system((OS_PREFIX + (user_path / user.first).string()).c_str());
+                    open_path((user_path / user.first).string());
                 ImGui::EndPopup();
             }
             ImGui::PopID();
@@ -396,7 +391,7 @@ void draw_user_management(GuiState &gui, HostState &host) {
         ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, ImVec2(0.5f, 0.5f));
         const auto confirm = is_lang ? gui.lang.user_management["confirm"] : "Confirm";
         if (!temp.name.empty() && check_free_name ? ImGui::Button(confirm.c_str(), BUTTON_SIZE) : ImGui::Selectable(confirm.c_str(), false, ImGuiSelectableFlags_Disabled, BUTTON_SIZE)) {
-            gui.users_avatar[user_id] = gui.users_avatar["temp"];
+            gui.users_avatar[user_id] = std::move(gui.users_avatar["temp"]);
             gui.users[user_id] = temp;
             save_user(gui, host, user_id);
             if (menu == "create")
@@ -481,8 +476,11 @@ void draw_user_management(GuiState &gui, HostState &host) {
                     fs::remove_all(user_path / user_id);
                     gui.users_avatar.erase(user_id);
                     gui.users.erase(get_users_index(gui, gui.users[user_id].name));
-                    if (user_id == host.io.user_id)
+                    if (gui.users.empty() || (user_id == host.io.user_id)) {
+                        host.cfg.user_id.clear();
+                        config::serialize_config(host.cfg, host.cfg.config_path);
                         host.io.user_id.clear();
+                    }
                     del_menu = "confirm";
                 }
             } else if (del_menu == "confirm") {
@@ -493,7 +491,7 @@ void draw_user_management(GuiState &gui, HostState &host) {
                 if (ImGui::Button("OK", BUTTON_SIZE)) {
                     del_menu.clear();
                     user_id.clear();
-                    if (!gui.users.size())
+                    if (gui.users.empty())
                         menu.clear();
                 }
             }
@@ -503,7 +501,7 @@ void draw_user_management(GuiState &gui, HostState &host) {
     ImGui::SetCursorPosY(WINDOW_SIZE.y - POS_SEPARATOR);
     ImGui::Separator();
     ImGui::SetWindowFontScale(1.f);
-    const auto USER_ALREADY_INIT = host.cfg.user_id == host.io.user_id;
+    const auto USER_ALREADY_INIT = !gui.users.empty() && !host.io.user_id.empty() && (host.cfg.user_id == host.io.user_id);
     if ((menu.empty() && USER_ALREADY_INIT) || (!menu.empty() && (menu != "confirm") && del_menu.empty())) {
         ImGui::SetCursorPos(ImVec2(54.f * SCALE.x, ImGui::GetCursorPosY() + (10.f * SCALE.y)));
         if (ImGui::Button("Cancel", ImVec2(80.f * SCALE.x, 40.f * SCALE.y))) {
@@ -520,7 +518,7 @@ void draw_user_management(GuiState &gui, HostState &host) {
             }
         }
     }
-    if (menu.empty()) {
+    if (menu.empty() && !gui.users.empty()) {
         ImGui::SetCursorPos(ImVec2((WINDOW_SIZE.x / 2.f) - (ImGui::CalcTextSize("Automatic User Login").x / 2.f), WINDOW_SIZE.y - 50.f * SCALE.y));
         if (ImGui::Checkbox("Automatic User Login", &host.cfg.auto_user_login))
             config::serialize_config(host.cfg, host.cfg.config_path);

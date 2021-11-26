@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <gxm/types.h>
 #include <renderer/commands.h>
 #include <renderer/state.h>
@@ -21,8 +38,8 @@ COMMAND_SET_STATE(region_clip) {
     const std::uint32_t yMin = helper.pop<std::uint32_t>();
     const std::uint32_t yMax = helper.pop<std::uint32_t>();
 
-    render_context->record.region_clip_min.x = static_cast<SceInt>(align(xMin, SCE_GXM_TILE_SIZEX) - SCE_GXM_TILE_SIZEX);
-    render_context->record.region_clip_min.y = static_cast<SceInt>(align(yMin, SCE_GXM_TILE_SIZEY) - SCE_GXM_TILE_SIZEY);
+    render_context->record.region_clip_min.x = static_cast<SceInt>(align_down(xMin, SCE_GXM_TILE_SIZEX));
+    render_context->record.region_clip_min.y = static_cast<SceInt>(align_down(yMin, SCE_GXM_TILE_SIZEY));
     render_context->record.region_clip_max.x = static_cast<SceInt>(align(xMax, SCE_GXM_TILE_SIZEX));
     render_context->record.region_clip_max.y = static_cast<SceInt>(align(yMax, SCE_GXM_TILE_SIZEY));
 
@@ -107,7 +124,7 @@ COMMAND_SET_STATE(uniform_buffer) {
 
     switch (renderer.current_backend) {
     case Backend::OpenGL: {
-        gl::set_uniform_buffer(*reinterpret_cast<gl::GLContext *>(render_context), is_vertex, block_num, size, data, config.log_active_shaders);
+        gl::set_uniform_buffer(*reinterpret_cast<gl::GLContext *>(render_context), mem, is_vertex, block_num, size, data, config.log_active_shaders);
 
         break;
     }
@@ -303,14 +320,19 @@ COMMAND_SET_STATE(stencil_ref) {
     }
 }
 
-COMMAND_SET_STATE(fragment_texture) {
+COMMAND_SET_STATE(texture) {
     const std::uint32_t texture_index = helper.pop<std::uint32_t>();
     SceGxmTexture texture = helper.pop<SceGxmTexture>();
 
-    if (texture_index >= SCE_GXM_MAX_TEXTURE_UNITS) {
-        LOG_ERROR("Out of bounds texture index {}", texture_index);
-    } else {
-        render_context->record.fragment_textures[texture_index] = texture;
+    switch (renderer.current_backend) {
+    case Backend::OpenGL:
+        gl::sync_texture(*reinterpret_cast<gl::GLContext *>(render_context), mem, texture_index, texture,
+            config, base_path, title_id);
+        break;
+
+    default:
+        REPORT_MISSING(renderer.current_backend);
+        break;
     }
 }
 
@@ -380,7 +402,7 @@ COMMAND(handle_set_state) {
         { renderer::GXMState::PolygonMode, cmd_set_state_polygon_mode },
         { renderer::GXMState::PointLineWidth, cmd_set_state_point_line_width },
         { renderer::GXMState::StencilFunc, cmd_set_state_stencil_func },
-        { renderer::GXMState::FragmentTexture, cmd_set_state_fragment_texture },
+        { renderer::GXMState::Texture, cmd_set_state_texture },
         { renderer::GXMState::StencilRef, cmd_set_state_stencil_ref },
         { renderer::GXMState::TwoSided, cmd_set_state_two_sided },
         { renderer::GXMState::CullMode, cmd_set_state_cull_mode },

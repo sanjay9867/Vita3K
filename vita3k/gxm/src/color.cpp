@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,16 +15,10 @@
 // with this program; if not, write to the Free Software Foundation, Inc.,
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-#pragma once
+#include <gxm/functions.h>
 
-#include <module/module.h>
-
-#include "SceDisplay.h"
-
-BRIDGE_DECL(sceDisplayGetFrameBuf)
-BRIDGE_DECL(sceDisplayGetFrameBufInternal)
-BRIDGE_DECL(sceDisplayGetMaximumFrameBufResolution)
-BRIDGE_DECL(sceDisplayGetResolutionInfoInternal)
-BRIDGE_DECL(sceDisplaySetFrameBuf)
-BRIDGE_DECL(sceDisplaySetFrameBufForCompat)
-BRIDGE_DECL(sceDisplaySetFrameBufInternal)
+namespace gxm {
+SceGxmColorBaseFormat get_base_format(SceGxmColorFormat src) {
+    return static_cast<SceGxmColorBaseFormat>(src & SCE_GXM_COLOR_BASE_FORMAT_MASK);
+}
+} // namespace gxm

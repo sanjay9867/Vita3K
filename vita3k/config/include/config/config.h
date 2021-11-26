@@ -30,6 +30,7 @@
     code(bool, "log-uniforms", false, log_uniforms)                                                     \
     code(bool, "pstv-mode", false, pstv_mode)                                                           \
     code(bool, "show-gui", false, show_gui)                                                             \
+    code(bool, "show-info-bar", false, show_info_bar)                                                   \
     code(bool, "apps-list-grid", false, apps_list_grid)                                                 \
     code(bool, "show-live-area-screen", true, show_live_area_screen)                                    \
     code(int, "icon-size", 64, icon_size)                                                               \
@@ -39,7 +40,7 @@
     code(bool, "disable-ngs", false, disable_ngs)                                                       \
     code(int, "sys-button", static_cast<int>(SCE_SYSTEM_PARAM_ENTER_BUTTON_CROSS), sys_button)          \
     code(int, "sys-lang", static_cast<int>(SCE_SYSTEM_PARAM_LANG_ENGLISH_US), sys_lang)                 \
-    code(bool, "lle-kernel", false, lle_kernel)                                                         \
+    code(bool, "lle-driver-user", false, lle_driver_user)                                               \
     code(int, "cpu-pool-size", 10, cpu_pool_size)                                                       \
     code(bool, "auto-lle", false, auto_lle)                                                             \
     code(int, "delay-background", 4, delay_background)                                                  \
@@ -95,8 +96,7 @@
 // When adding in a new macro for generation, ALL options must be stated.
 #define CONFIG_VECTOR(code)                                                                             \
     code(std::vector<std::string>, "lle-modules", std::vector<std::string>{}, lle_modules)              \
-    code(std::vector<uint64_t>, "ime-langs", std::vector<uint64_t>{4}, ime_langs)                       \
-    code(std::vector<std::string>, "last-loaded-apps", std::vector<std::string>{}, last_loaded_apps)                                              
+    code(std::vector<uint64_t>, "ime-langs", std::vector<uint64_t>{4}, ime_langs)
 
 // Parent macro for easier generation
 #define CONFIG_LIST(code)                                                                               \

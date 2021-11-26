@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -35,9 +35,10 @@ public:
     }
 
     ~GLObjectArray() {
-        assert(deleter != nullptr);
-        deleter(static_cast<GLsizei>(names.size()), &names[0]);
-        names.fill(0);
+        if (deleter) {
+            deleter(static_cast<GLsizei>(names.size()), &names[0]);
+            names.fill(0);
+        }
     }
 
     bool init(renderer::Generator *generator, renderer::Deleter *deleter) {

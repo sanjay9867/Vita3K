@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -866,13 +866,8 @@ EXPORT(int, sceKernelCloseModule) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceKernelCreateCond, const char *name, SceUInt attr, SceUID mutexid, void *opt_param) {
-    SceUID uid;
-
-    if (auto error = condvar_create(&uid, host.kernel, export_name, name, thread_id, attr, mutexid, SyncWeight::Heavy)) {
-        return error;
-    }
-    return uid;
+EXPORT(SceUID, sceKernelCreateCond, const char *pName, SceUInt32 attr, SceUID mutexId, const SceKernelCondOptParam *pOptParam) {
+    return CALL_EXPORT(_sceKernelCreateCond, pName, attr, mutexId, pOptParam);
 }
 
 EXPORT(int, sceKernelCreateEventFlag, const char *name, unsigned int attr, unsigned int flags, SceKernelEventFlagOptParam *opt) {
@@ -1002,20 +997,20 @@ EXPORT(int, sceKernelExitProcess, int res) {
     return SCE_KERNEL_OK;
 }
 
-EXPORT(int, sceKernelGetCallbackInfo) {
-    return UNIMPLEMENTED();
+EXPORT(SceInt32, sceKernelGetCallbackInfo, SceUID callbackId, Ptr<SceKernelCallbackInfo> pInfo) {
+    return CALL_EXPORT(_sceKernelGetCallbackInfo, callbackId, pInfo);
 }
 
-EXPORT(int, sceKernelGetCondInfo) {
-    return UNIMPLEMENTED();
+EXPORT(SceInt32, sceKernelGetCondInfo, SceUID condId, Ptr<SceKernelCondInfo> pInfo) {
+    return CALL_EXPORT(_sceKernelGetCondInfo, condId, pInfo);
 }
 
 EXPORT(int, sceKernelGetCurrentThreadVfpException) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceKernelGetEventFlagInfo) {
-    return UNIMPLEMENTED();
+EXPORT(SceInt32, sceKernelGetEventFlagInfo, SceUID evfId, Ptr<SceKernelEventFlagInfo> pInfo) {
+    return CALL_EXPORT(_sceKernelGetEventFlagInfo, evfId, pInfo);
 }
 
 EXPORT(int, sceKernelGetEventInfo) {
@@ -1091,8 +1086,8 @@ EXPORT(int, sceKernelGetRWLockInfo) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceKernelGetSemaInfo) {
-    return UNIMPLEMENTED();
+EXPORT(SceInt32, sceKernelGetSemaInfo, SceUID semaId, Ptr<SceKernelSemaInfo> pInfo) {
+    return CALL_EXPORT(_sceKernelGetSemaInfo, semaId, pInfo);
 }
 
 EXPORT(int, sceKernelGetSystemInfo) {
@@ -1107,8 +1102,8 @@ EXPORT(Ptr<Ptr<void>>, sceKernelGetTLSAddr, int key) {
     return host.kernel.get_thread_tls_addr(host.mem, thread_id, key);
 }
 
-EXPORT(int, sceKernelGetThreadContextForVM) {
-    return UNIMPLEMENTED();
+EXPORT(int, sceKernelGetThreadContextForVM, SceUID threadId, Ptr<SceKernelThreadCpuRegisterInfo> pCpuRegisterInfo, Ptr<SceKernelThreadVfpRegisterInfo> pVfpRegisterInfo) {
+    return CALL_EXPORT(_sceKernelGetThreadContextForVM, threadId, pCpuRegisterInfo, pVfpRegisterInfo);
 }
 
 EXPORT(int, sceKernelGetThreadCpuAffinityMask2) {
@@ -1142,28 +1137,8 @@ EXPORT(int, sceKernelGetThreadId) {
     return thread_id;
 }
 
-EXPORT(int, sceKernelGetThreadInfo, SceUID thid, SceKernelThreadInfo *info) {
-    STUBBED("STUB");
-
-    if (!info)
-        return SCE_KERNEL_ERROR_ILLEGAL_SIZE;
-
-    // TODO: SCE_KERNEL_ERROR_ILLEGAL_CONTEXT check
-
-    if (info->size > 0x80)
-        return SCE_KERNEL_ERROR_NOSYS;
-
-    const ThreadStatePtr thread = lock_and_find(thid ? thid : thread_id, host.kernel.threads, host.kernel.mutex);
-
-    strncpy(info->name, thread->name.c_str(), 0x1f);
-    info->stack = Ptr<void>(thread->stack.get());
-    info->stackSize = thread->stack_size;
-    info->initPriority = thread->priority;
-    info->currentPriority = thread->priority;
-    info->entry = SceKernelThreadEntry(thread->entry_point);
-    info->runClocks = rtc_get_ticks(host.kernel.base_tick.tick) - thread->start_tick;
-
-    return SCE_KERNEL_OK;
+EXPORT(SceInt32, sceKernelGetThreadInfo, SceUID threadId, Ptr<SceKernelThreadInfo> pInfo) {
+    return CALL_EXPORT(_sceKernelGetThreadInfo, threadId, pInfo);
 }
 
 EXPORT(int, sceKernelGetThreadRunStatus) {
@@ -1198,71 +1173,6 @@ EXPORT(int, sceKernelGetTimerTime, SceUID timer_handle, SceKernelSysClock *time)
     *time = get_current_time() - timer_info->time;
 
     return 0;
-}
-
-/**
- * \brief Loads a dynamic module into memory if it wasn't already loaded. If it was, find it and return it. First 3 arguments are outputs.
- * \param mod_id UID of the loaded module object
- * \param entry_point Entry point (module_start) of the loaded module
- * \param module Module info
- * \param host 
- * \param export_name 
- * \param path File name of module file
- * \param error_val Error value on failure
- * \return True on success, false on failure
- */
-bool load_module(SceUID &mod_id, Ptr<const void> &entry_point, SceKernelModuleInfoPtr &module, HostState &host, const char *export_name, const char *path, int &error_val) {
-    const auto &loaded_modules = host.kernel.loaded_modules;
-
-    auto module_iter = std::find_if(loaded_modules.begin(), loaded_modules.end(), [path](const auto &p) {
-        return std::string(p.second->path) == path;
-    });
-
-    if (module_iter == loaded_modules.end()) {
-        // module is not loaded, load it here
-
-        const auto file = open_file(host.io, path, SCE_O_RDONLY, host.pref_path, export_name);
-        if (file < 0) {
-            error_val = RET_ERROR(file);
-            return false;
-        }
-        const auto size = seek_file(file, 0, SCE_SEEK_END, host.io, export_name);
-        if (size < 0) {
-            error_val = RET_ERROR(SCE_ERROR_ERRNO_EINVAL);
-            return false;
-        }
-
-        if (seek_file(file, 0, SCE_SEEK_SET, host.io, export_name) < 0) {
-            error_val = RET_ERROR(static_cast<int>(size));
-            return false;
-        }
-
-        auto *data = new char[static_cast<int>(size) + 1]; // null-terminated char array
-        if (read_file(data, host.io, file, SceSize(size), export_name) < 0) {
-            delete[] data;
-            error_val = RET_ERROR(static_cast<int>(size));
-            return false;
-        }
-
-        mod_id = load_self(entry_point, host.kernel, host.mem, data, path);
-
-        close_file(host.io, file, export_name);
-        delete[] data;
-        if (mod_id < 0) {
-            error_val = RET_ERROR(mod_id);
-            return false;
-        }
-
-        module_iter = loaded_modules.find(mod_id);
-        module = module_iter->second;
-    } else {
-        // module is already loaded
-        module = module_iter->second;
-
-        mod_id = module_iter->first;
-        entry_point = module->start_entry;
-    }
-    return true;
 }
 
 EXPORT(SceUID, sceKernelLoadModule, char *path, int flags, SceKernelLMOption *option) {
@@ -1385,8 +1295,8 @@ EXPORT(int, sceKernelSetEventWithNotifyCallback) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceKernelSetThreadContextForVM) {
-    return UNIMPLEMENTED();
+EXPORT(int, sceKernelSetThreadContextForVM, SceUID threadId, Ptr<SceKernelThreadCpuRegisterInfo> pCpuRegisterInfo, Ptr<SceKernelThreadVfpRegisterInfo> pVfpRegisterInfo) {
+    return CALL_EXPORT(_sceKernelSetThreadContextForVM, threadId, pCpuRegisterInfo, pVfpRegisterInfo);
 }
 
 EXPORT(int, sceKernelSetTimerEvent, SceUID timer_handle, int32_t type, SceKernelSysClock *clock, int32_t repeats) {
@@ -1430,8 +1340,8 @@ EXPORT(int, sceKernelStackChkFail) {
     return UNIMPLEMENTED();
 }
 
-EXPORT(int, sceKernelStartModule) {
-    return UNIMPLEMENTED();
+EXPORT(int, sceKernelStartModule, SceUID uid, SceSize args, const Ptr<void> argp, SceUInt32 flags, const Ptr<SceKernelStartModuleOpt> pOpt, int *pRes) {
+    return CALL_EXPORT(_sceKernelStartModule, uid, args, argp, flags, pOpt, pRes);
 }
 
 EXPORT(int, sceKernelStartThread, SceUID thid, SceSize arglen, Ptr<void> argp) {
@@ -1570,7 +1480,79 @@ EXPORT(int, sceSblACMgrIsGameProgram) {
     return UNIMPLEMENTED();
 }
 
+EXPORT(int, sceSblGcAuthMgrAdhocBB160Auth1) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB160Auth2) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB160Auth3) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB160Auth4) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB160Auth5) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB160BroadCastDecrypt) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB160BroadCastEncrypt) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB160GetKeys) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB160Init) {
+    return UNIMPLEMENTED();
+}
+
 EXPORT(int, sceSblGcAuthMgrAdhocBB160Shutdown) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB160UniCastDecrypt) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB160UniCastEncrypt) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB224Auth1) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB224Auth2) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB224Auth3) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB224Auth4) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB224Auth5) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB224GetKeys) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrAdhocBB224Init) {
     return UNIMPLEMENTED();
 }
 
@@ -1578,7 +1560,27 @@ EXPORT(int, sceSblGcAuthMgrAdhocBB224Shutdown) {
     return UNIMPLEMENTED();
 }
 
+EXPORT(int, sceSblGcAuthMgrGetMediaIdType01) {
+    return UNIMPLEMENTED();
+}
+
 EXPORT(int, sceSblGcAuthMgrMsSaveBBCipherFinal) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrMsSaveBBCipherInit) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrMsSaveBBCipherUpdate) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrMsSaveBBMacFinal) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrMsSaveBBMacInit) {
     return UNIMPLEMENTED();
 }
 
@@ -1587,6 +1589,30 @@ EXPORT(int, sceSblGcAuthMgrMsSaveBBMacUpdate) {
 }
 
 EXPORT(int, sceSblGcAuthMgrPcactActivation) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrPcactGetChallenge) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrPkgVry) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrPsmactCreateC1) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrPsmactVerifyR1) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrSclkGetData1) {
+    return UNIMPLEMENTED();
+}
+
+EXPORT(int, sceSblGcAuthMgrSclkSetData2) {
     return UNIMPLEMENTED();
 }
 
@@ -1882,8 +1908,37 @@ BRIDGE_IMPL(sceKernelWaitSignalCB)
 BRIDGE_IMPL(sceKernelWaitThreadEnd)
 BRIDGE_IMPL(sceKernelWaitThreadEndCB)
 BRIDGE_IMPL(sceSblACMgrIsGameProgram)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160Auth1)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160Auth2)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160Auth3)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160Auth4)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160Auth5)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160BroadCastDecrypt)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160BroadCastEncrypt)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160GetKeys)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160Init)
 BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160Shutdown)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160UniCastDecrypt)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB160UniCastEncrypt)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB224Auth1)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB224Auth2)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB224Auth3)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB224Auth4)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB224Auth5)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB224GetKeys)
+BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB224Init)
 BRIDGE_IMPL(sceSblGcAuthMgrAdhocBB224Shutdown)
+BRIDGE_IMPL(sceSblGcAuthMgrGetMediaIdType01)
 BRIDGE_IMPL(sceSblGcAuthMgrMsSaveBBCipherFinal)
+BRIDGE_IMPL(sceSblGcAuthMgrMsSaveBBCipherInit)
+BRIDGE_IMPL(sceSblGcAuthMgrMsSaveBBCipherUpdate)
+BRIDGE_IMPL(sceSblGcAuthMgrMsSaveBBMacFinal)
+BRIDGE_IMPL(sceSblGcAuthMgrMsSaveBBMacInit)
 BRIDGE_IMPL(sceSblGcAuthMgrMsSaveBBMacUpdate)
 BRIDGE_IMPL(sceSblGcAuthMgrPcactActivation)
+BRIDGE_IMPL(sceSblGcAuthMgrPcactGetChallenge)
+BRIDGE_IMPL(sceSblGcAuthMgrPkgVry)
+BRIDGE_IMPL(sceSblGcAuthMgrPsmactCreateC1)
+BRIDGE_IMPL(sceSblGcAuthMgrPsmactVerifyR1)
+BRIDGE_IMPL(sceSblGcAuthMgrSclkGetData1)
+BRIDGE_IMPL(sceSblGcAuthMgrSclkSetData2)

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -30,10 +30,6 @@ std::string construct_normalized_path(const VitaIoDevice dev, const std::string 
 
     // Normalize the path
     auto normalized = path;
-    string_utils::replace(normalized, "\\", "/");
-    string_utils::replace(normalized, "/./", "/");
-    string_utils::replace(normalized, "//", "/");
-    // TODO: Handle dot-dot paths
     normalized.front() == '/' ? normalized = device_path + normalized : normalized = device_path + '/' + normalized;
 
     if (!ext.empty()) {

@@ -443,10 +443,8 @@ void draw_trophy_collection(GuiState &gui, HostState &host) {
     // Trophy Collection
     if (np_com_id_list.empty()) {
         ImGui::SetWindowFontScale(1.6f * RES_SCALE.x);
-        ImGui::SetCursorPosY(120.f * SCALE.y);
-        ImGui::PushTextWrapPos(SIZE_LIST.x);
-        ImGui::TextColored(GUI_COLOR_TEXT, !lang["no_trophies"].empty() ? lang["no_trophies"].c_str() : "There are no trophies.\nYou can earn trophies by using an application that supports the trophy feature.");
-        ImGui::PopTextWrapPos();
+        ImGui::SetCursorPosY(140.f * SCALE.y);
+        ImGui::TextWrapped(!lang["no_trophies"].empty() ? lang["no_trophies"].c_str() : "There are no trophies.\nYou can earn trophies by using an application that supports the trophy feature.");
     } else {
         // Set Scroll Pos
         if (set_scroll_pos) {
@@ -604,7 +602,7 @@ void draw_trophy_collection(GuiState &gui, HostState &host) {
                     ImGui::PopStyleVar();
                     ImGui::NextColumn();
                 }
-                // Detail for Np Com ID
+                // Detail of Np Com ID
             } else if (detail_np_com_id) {
                 ImGui::SetWindowFontScale(1.5f * RES_SCALE.x);
                 if (gui.trophy_np_com_id_list_icons[np_com_id_selected].find(group_id_selected == "global" ? "000" : group_id_selected) != gui.trophy_np_com_id_list_icons[np_com_id_selected].end())
@@ -638,7 +636,7 @@ void draw_trophy_collection(GuiState &gui, HostState &host) {
                 }
                 ImGui::PushTextWrapPos(SIZE_INFO.x - 40.f);
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (35.f * SCALE.y));
-                ImGui::Text("Details");
+                ImGui::TextColored(GUI_COLOR_TEXT, "%s", !lang["details"].empty() ? lang["details"].c_str() : "Details");
                 ImGui::SameLine(260.f * SCALE.x);
                 ImGui::TextColored(GUI_COLOR_TEXT, "%s", np_com_id_info[np_com_id_selected].detail[group_id_selected == "global" ? "000" : group_id_selected].c_str());
                 ImGui::PopTextWrapPos();

@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -17,8 +17,8 @@
 
 #include "SceCpu.h"
 
-EXPORT(int, sceKernelCpuGetCpuId) {
+EXPORT(int, sceKernelGetCpuId) {
     return UNIMPLEMENTED();
 }
 
-BRIDGE_IMPL(sceKernelCpuGetCpuId)
+BRIDGE_IMPL(sceKernelGetCpuId)

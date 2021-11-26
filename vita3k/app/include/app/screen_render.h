@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@ namespace app {
 
 class gl_screen_renderer {
 public:
-    gl_screen_renderer() {}
+    gl_screen_renderer() = default;
     ~gl_screen_renderer();
 
     bool init(const std::string &base_path);
@@ -43,7 +43,6 @@ private:
 
     using screen_vertices_t = screen_vertex[screen_vertex_count];
 
-private:
     GLuint m_vao{ 0 };
     GLuint m_vbo{ 0 };
     SharedGLObject m_render_shader;

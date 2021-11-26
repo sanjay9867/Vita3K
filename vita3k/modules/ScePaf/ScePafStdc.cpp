@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -16,6 +16,10 @@
 // 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 #include "ScePafStdc.h"
+
+EXPORT(int, sce_paf_memalign) {
+    return UNIMPLEMENTED();
+}
 
 EXPORT(int, sce_paf_private_abs) {
     return UNIMPLEMENTED();
@@ -369,6 +373,7 @@ EXPORT(int, sce_paf_private_wmemset) {
     return UNIMPLEMENTED();
 }
 
+BRIDGE_IMPL(sce_paf_memalign)
 BRIDGE_IMPL(sce_paf_private_abs)
 BRIDGE_IMPL(sce_paf_private_atexit)
 BRIDGE_IMPL(sce_paf_private_atof)

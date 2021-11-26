@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -124,14 +124,23 @@ bool is_valid_addr(const MemState &state, Address addr) {
     return addr && state.allocator.free_slot_count(page_num, page_num + 1) == 0;
 }
 
+bool is_valid_addr_range(const MemState &state, Address start, Address end) {
+    const uint32_t start_page = start / state.page_size;
+    const uint32_t end_page = (end + state.page_size - 1) / state.page_size;
+    return state.allocator.free_slot_count(start_page, end_page) == 0;
+}
+
 static Address alloc_inner(MemState &state, uint32_t start_page, int page_count, const char *name, const bool force) {
-    // Try to find and allocate page
-    int page_num = state.allocator.allocate_from(start_page, page_count, !force);
-    if (page_num < 0) {
-        LOG_CRITICAL("Failed to allocate page");
-    }
-    if (force && page_num != start_page) {
-        LOG_CRITICAL("Failed to allocate at specific page");
+    int page_num;
+    if (force) {
+        if (state.allocator.allocate_at(start_page, page_count) < 0) {
+            LOG_CRITICAL("Failed to allocate at specific page");
+        }
+        page_num = start_page;
+    } else {
+        page_num = state.allocator.allocate_from(start_page, page_count, false);
+        if (page_num < 0)
+            return 0;
     }
 
     const int size = page_count * state.page_size;
@@ -162,9 +171,8 @@ static Address alloc_inner(MemState &state, uint32_t start_page, int page_count,
 Address alloc(MemState &state, size_t size, const char *name, unsigned int alignment) {
     if (alignment == 0)
         return alloc(state, size, name);
-
     const std::lock_guard<std::mutex> lock(state.generation_mutex);
-    size = align(size, alignment);
+    size += alignment;
     const size_t page_count = align(size, state.page_size) / state.page_size;
     const Address addr = alloc_inner(state, 0, page_count, name, false);
     const Address align_addr = align(addr, alignment);
@@ -172,14 +180,13 @@ Address alloc(MemState &state, size_t size, const char *name, unsigned int align
     const size_t align_page_num = align_addr / state.page_size;
 
     if (page_num != align_page_num) {
-        const size_t remnant = align_page_num - page_num;
-        state.allocator.free(page_num, remnant);
-
         MemPage &page = state.page_table[page_num];
         MemPage &align_page = state.page_table[align_page_num];
+        const size_t remnant_front = align_page_num - page_num;
+        state.allocator.free(page_num, remnant_front);
         page.allocated = 0;
         align_page.allocated = 1;
-        align_page.size = page.size - remnant;
+        align_page.size = page.size - remnant_front;
     }
 
     return align_addr;
@@ -312,7 +319,7 @@ Address alloc(MemState &state, size_t size, const char *name) {
 Address alloc_at(MemState &state, Address address, size_t size, const char *name) {
     const std::lock_guard<std::mutex> lock(state.generation_mutex);
     const uint32_t wanted_page = address / state.page_size;
-    size += address - wanted_page * state.page_size;
+    size += address % state.page_size;
     const size_t page_count = align(size, state.page_size) / state.page_size;
     alloc_inner(state, wanted_page, page_count, name, true);
     return address;

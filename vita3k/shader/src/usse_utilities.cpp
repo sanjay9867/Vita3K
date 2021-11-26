@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <shader/usse_constant_table.h>
 #include <shader/usse_program_analyzer.h>
 #include <shader/usse_utilities.h>
@@ -382,7 +399,7 @@ static spv::Function *make_f16_pack_func(spv::Builder &b, const FeatureState &fe
     return f16_pack_func;
 }
 
-static spv::Function *make_fetch_memory_func_for_array(spv::Builder &b, const SpirvUniformBufferInfo &info, const int buffer_index) {
+static spv::Function *make_fetch_memory_func_for_array(spv::Builder &b, spv::Id buffer_container, const SpirvUniformBufferInfo &info, const int buffer_index) {
     // The address can be unaligned, so we load two words around address / 4 and combine them.
     // | = address
     // s = memory[address/4] (source)
@@ -422,14 +439,14 @@ static spv::Function *make_fetch_memory_func_for_array(spv::Builder &b, const Sp
     spv::Id rem_in_bits = b.createBinOp(spv::OpIMul, type_i32, rem, eight_cst);
     spv::Id rem_inv_in_bits = b.createBinOp(spv::OpIMul, type_i32, rem_inv, eight_cst);
 
-    spv::Id src = b.createLoad(b.createAccessChain(spv::StorageClassPrivate, info.var, { zero_cst, base_vector, base_offset }));
+    spv::Id src = b.createLoad(b.createAccessChain(spv::StorageClassStorageBuffer, buffer_container, { b.makeIntConstant(info.index_in_container), base_vector, base_offset }));
 
     spv::Id friend_offset = b.createBinOp(spv::OpIAdd, type_i32, base_offset, one_cst);
     spv::Id friend_vector = b.createBinOp(spv::OpIAdd, type_i32, base_vector, b.createBinOp(spv::OpSDiv, type_i32, friend_offset, b.makeIntConstant(4)));
 
     friend_offset = b.createBinOp(spv::OpSRem, type_i32, friend_offset, four_cst);
 
-    spv::Id src_friend = b.createLoad(b.createAccessChain(spv::StorageClassPrivate, info.var, { zero_cst, friend_vector, friend_offset }));
+    spv::Id src_friend = b.createLoad(b.createAccessChain(spv::StorageClassStorageBuffer, buffer_container, { b.makeIntConstant(info.index_in_container), friend_vector, friend_offset }));
     spv::Id src_casted = b.createUnaryOp(spv::OpBitcast, type_ui32, src);
     spv::Id src_friend_casted = b.createUnaryOp(spv::OpBitcast, type_ui32, src_friend);
 
@@ -477,7 +494,7 @@ static spv::Function *make_fetch_memory_func(spv::Builder &b, const SpirvShaderP
         fetch_stacks.push(std::make_unique<spv::Builder::If>(need_final, spv::SelectionControlMaskNone, b));
 
         spv::Id subtracted_base = b.createBinOp(spv::OpISub, type_i32, addr, range_begin);
-        spv::Function *access_func = make_fetch_memory_func_for_array(b, buffer_info, index);
+        spv::Function *access_func = make_fetch_memory_func_for_array(b, params.buffer_container, buffer_info, index);
 
         b.makeReturn(false, b.createFunctionCall(access_func, { subtracted_base }));
     }
@@ -587,6 +604,16 @@ static spv::Id apply_modifiers(spv::Builder &b, const shader::usse::RegisterFlag
 
     spv::Id result = val;
 
+    if (flags & shader::usse::RegisterFlags::Absolute) {
+        // Absolute the result
+        if (is_uint) {
+            // It's already > 0, what do you expect more
+            return result;
+        }
+
+        result = b.createBuiltinCall(dest_type, b.import("GLSL.std.450"), GLSLstd450FAbs, { result });
+    }
+
     // Apply modifier flags
     if (flags & shader::usse::RegisterFlags::Negative) {
         // Negate the value
@@ -606,16 +633,6 @@ static spv::Id apply_modifiers(spv::Builder &b, const shader::usse::RegisterFlag
 
         std::vector<spv::Id> ops(num_comp, c0);
         result = b.createBinOp(sub_op, dest_type, (num_comp == 1) ? c0 : b.makeCompositeConstant(dest_type, ops), result);
-    }
-
-    if (flags & shader::usse::RegisterFlags::Absolute) {
-        // Absolute the result
-        if (is_uint) {
-            // It's already > 0, what do you expect more
-            return result;
-        }
-
-        result = b.createBuiltinCall(dest_type, b.import("GLSL.std.450"), GLSLstd450FAbs, { result });
     }
 
     return result;
@@ -1091,13 +1108,16 @@ void shader::usse::utils::store(spv::Builder &b, const SpirvShaderParameters &pa
         }
     }
 
-    // Floor down to nearest size comp
+    // Floor down to nearest component that a float can hold. We originally want to optimize it to store from the first offset in float unit that writes the data.
+    // But for unit size smaller than float, we have to start from the beginning in float unit.
     const int num_comp_in_float = static_cast<int>(4 / size_comp);
     nearest_swizz_on = (int)((nearest_swizz_on / num_comp_in_float) * num_comp_in_float);
 
     if (dest.type != DataType::F32) {
         std::vector<spv::Id> composites;
         spv::Id vec_comp_type = utils::unwrap_type(b, b.getTypeId(source));
+        int source_value_taken_count = 0;
+
         // We need to pack source
         for (auto i = 0; i < static_cast<int>(total_comp_source); i += num_comp_in_float) {
             // Shuffle to get the type out
@@ -1107,7 +1127,7 @@ void shader::usse::utils::store(spv::Builder &b, const SpirvShaderParameters &pa
                     if (b.isScalar(source) || total_comp_source == 1) {
                         ops.push_back(source);
                     } else {
-                        ops.push_back(b.createOp(spv::OpVectorExtractDynamic, vec_comp_type, { source, b.makeIntConstant(std::min(i + j, (int)total_comp_source - 1)) }));
+                        ops.push_back(b.createOp(spv::OpVectorExtractDynamic, vec_comp_type, { source, b.makeIntConstant(std::min(source_value_taken_count++, (int)total_comp_source - 1)) }));
                     }
                 } else {
                     if (elem == spv::NoResult) {

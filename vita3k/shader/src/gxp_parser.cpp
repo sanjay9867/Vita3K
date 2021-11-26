@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #include <gxm/functions.h>
 #include <shader/gxp_parser.h>
 #include <shader/usse_program_analyzer.h>
@@ -123,7 +140,7 @@ ProgramInput shader::get_program_input(const SceGxmProgram &program) {
                     const std::uint32_t reg_block_size = container ? container->size_in_f32 : 0;
 
                     UniformBuffer buffer;
-                    buffer.index = (parameter.container_index + 1) % SCE_GXM_REAL_MAX_UNIFORM_BUFFER;
+                    buffer.index = parameter.container_index;
                     buffer.reg_block_size = reg_block_size;
                     buffer.rw = false;
                     buffer.reg_start_offset = offset;
@@ -154,7 +171,7 @@ ProgramInput shader::get_program_input(const SceGxmProgram &program) {
         case SCE_GXM_PARAMETER_CATEGORY_UNIFORM_BUFFER: {
             if (uniform_buffers.find(parameter.resource_index) == uniform_buffers.end()) {
                 UniformBuffer buffer;
-                buffer.index = (parameter.resource_index + 1) % SCE_GXM_REAL_MAX_UNIFORM_BUFFER;
+                buffer.index = parameter.resource_index;
                 buffer.reg_block_size = 0;
                 buffer.rw = false;
                 buffer.reg_start_offset = 0;
@@ -178,7 +195,7 @@ ProgramInput shader::get_program_input(const SceGxmProgram &program) {
     }
 
     auto default_ub_ite = std::find_if(program_input.uniform_buffers.begin(), program_input.uniform_buffers.end(), [](const shader::usse::UniformBuffer &buffer) {
-        return buffer.index == 0;
+        return buffer.index == 14;
     });
 
     if ((default_ub_ite == program_input.uniform_buffers.end()) && (program.default_uniform_buffer_count != 0)) {
@@ -214,7 +231,7 @@ ProgramInput shader::get_program_input(const SceGxmProgram &program) {
             item.array_size = 1;
 
             UniformBufferInputSource source;
-            source.base = buffer_info->ldst_base_value + 4;
+            source.base = buffer_info->ldst_base_value;
             source.index = buffer->second.index;
             item.source = source;
 
@@ -291,7 +308,7 @@ ProgramInput shader::get_program_input(const SceGxmProgram &program) {
         item.generic_type = GenericType::SCALER;
         item.type = DataType::UINT32;
 
-        if (program.special_flags & SCE_GXM_SPECIAL_HAS_INDEX_SEMANTIC) {
+        if (program.program_flags & SCE_GXM_PROGRAM_FLAG_INDEX_USED) {
             AttributeInputSource source;
             source.semantic = SCE_GXM_PARAMETER_SEMANTIC_INDEX;
             source.name = "gl_VertexID";
@@ -302,7 +319,7 @@ ProgramInput shader::get_program_input(const SceGxmProgram &program) {
             program_input.inputs.push_back(item);
         }
 
-        if (program.special_flags & SCE_GXM_SPECIAL_HAS_INSTANCE_SEMANTIC) {
+        if (program.program_flags & SCE_GXM_PROGRAM_FLAG_INSTANCE_USED) {
             AttributeInputSource source;
             source.semantic = SCE_GXM_PARAMETER_SEMANTIC_INSTANCE;
             source.name = "gl_InstanceID";

@@ -1,3 +1,20 @@
+// Vita3K emulator project
+// Copyright (C) 2021 Vita3K team
+//
+// This program is free software; you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation; either version 2 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License along
+// with this program; if not, write to the Free Software Foundation, Inc.,
+// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+
 #pragma once
 
 #include <renderer/commands.h>
@@ -37,7 +54,7 @@ void subject_done(SceGxmSyncObject *sync_object, const SyncObjectSubject subject
  */
 void subject_in_progress(SceGxmSyncObject *sync_object, const SyncObjectSubject subjects);
 
-int wait_for_status(State &state, int *result_code);
+int wait_for_status(State &state, int *status, int signal, bool wake_on_equal);
 void reset_command_list(CommandList &command_list);
 void submit_command_list(State &state, renderer::Context *context, CommandList &command_list);
 void process_batch(State &state, MemState &mem, Config &config, CommandList &command_list, const char *base_path, const char *title_id);
@@ -53,7 +70,7 @@ void set_stencil_func(State &state, Context *ctx, bool is_front, SceGxmStencilFu
 void set_stencil_ref(State &state, Context *ctx, bool is_front, unsigned char sref);
 void set_program(State &state, Context *ctx, Ptr<const void> program, const bool is_fragment);
 void set_cull_mode(State &state, Context *ctx, SceGxmCullMode cull);
-void set_fragment_texture(State &state, Context *ctx, const std::uint32_t tex_index, const SceGxmTexture tex);
+void set_texture(State &state, Context *ctx, const std::uint32_t tex_index, const SceGxmTexture tex);
 void set_viewport_real(State &state, Context *ctx, float xOffset, float yOffset, float zOffset, float xScale, float yScale, float zScale);
 void set_viewport_flat(State &state, Context *ctx);
 void set_region_clip(State &state, Context *ctx, SceGxmRegionClipMode mode, unsigned int xMin, unsigned int xMax, unsigned int yMin, unsigned int yMax);
@@ -115,7 +132,11 @@ int send_single_command(State &state, Context *ctx, const CommandOpcode opcode, 
 
     // Submit it
     submit_command_list(state, ctx, list);
-    return wait_for_status(state, &status);
+    return wait_for_status(state, &status, CommandErrorCodePending, false);
+}
+
+namespace color {
+size_t bits_per_pixel(SceGxmColorBaseFormat base_format);
 }
 
 struct TextureCacheState;
@@ -148,6 +169,7 @@ void cache_and_bind_texture(TextureCacheState &cache, const SceGxmTexture &gxm_t
 size_t bits_per_pixel(SceGxmTextureBaseFormat base_format);
 bool is_compressed_format(SceGxmTextureBaseFormat base_format, std::uint32_t width, std::uint32_t height, size_t &source_size);
 TextureCacheHash hash_texture_data(const SceGxmTexture &texture, const MemState &mem);
+size_t texture_size(const SceGxmTexture &texture);
 
 } // namespace texture
 

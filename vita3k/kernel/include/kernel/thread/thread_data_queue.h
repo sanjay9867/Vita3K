@@ -1,5 +1,5 @@
 // Vita3K emulator project
-// Copyright (C) 2018 Vita3K team
+// Copyright (C) 2021 Vita3K team
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -24,7 +24,7 @@
 template <typename T>
 class ThreadDataQueueInteratorBase {
 public:
-    virtual ~ThreadDataQueueInteratorBase(){};
+    virtual ~ThreadDataQueueInteratorBase() = default;
     virtual bool operator==(const ThreadDataQueueInteratorBase &rhs) = 0;
     virtual ThreadDataQueueInteratorBase<T> &operator++() = 0;
     virtual ThreadDataQueueInteratorBase<T> *clone() const = 0;
@@ -106,9 +106,9 @@ public:
         : it(it) {
     }
 
-    ~FIFOThreadDataQueueInteratorBase() override {}
+    ~FIFOThreadDataQueueInteratorBase() override = default;
 
-    virtual bool operator==(const ThreadDataQueueInteratorBase<T> &rhs) {
+    bool operator==(const ThreadDataQueueInteratorBase<T> &rhs) override {
         auto casted = static_cast<const FIFOThreadDataQueueInteratorBase<T> &>(rhs);
         return it == casted.it;
     }
@@ -132,8 +132,7 @@ public:
 template <typename T>
 class FIFOThreadDataQueue : public ThreadDataQueue<T> {
 public:
-    FIFOThreadDataQueue() {
-    }
+    FIFOThreadDataQueue() = default;
 
     ThreadDataQueueInterator<T> begin() override {
         return make_iterator(c.begin());
@@ -196,7 +195,7 @@ public:
         : it(it) {
     }
 
-    ~PriorityThreadDataQueueInteratorBase() override {}
+    ~PriorityThreadDataQueueInteratorBase() override = default;
 
     bool operator==(const ThreadDataQueueInteratorBase<T> &rhs) override {
         auto casted = static_cast<const PriorityThreadDataQueueInteratorBase<T> &>(rhs);
@@ -222,7 +221,7 @@ public:
 template <typename T>
 class PriorityThreadDataQueue : public ThreadDataQueue<T> {
 public:
-    PriorityThreadDataQueue() {}
+    PriorityThreadDataQueue() = default;
 
     ThreadDataQueueInterator<T> begin() override {
         return make_iterator(c.begin());
