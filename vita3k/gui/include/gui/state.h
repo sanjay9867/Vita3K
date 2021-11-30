@@ -178,6 +178,14 @@ enum DateFormat {
     MM_DD_YYYY
 };
 
+enum DateTime {
+    CLOCK,
+    DATE_DETAIL,
+    DATE_MINI,
+    DAY_MOMENT,
+    HOUR,
+};
+
 struct User {
     std::string id;
     std::string name = "Vita3K";
@@ -214,6 +222,16 @@ struct TimeApp {
     std::string app;
     time_t last_time_used;
     int64_t time_used;
+};
+
+struct InfoBarColor {
+    ImU32 bar = 0xFF000000;
+    ImU32 indicator = 0xFFFFFFFF;
+};
+
+enum NoticeIcon {
+    NO,
+    NEW
 };
 
 struct GuiState {
@@ -263,7 +281,7 @@ struct GuiState {
     std::map<std::string, std::map<std::string, ImGui_Texture>> themes_preview;
     std::vector<ImGui_Texture> theme_backgrounds;
     std::vector<ImVec4> theme_backgrounds_font_color;
-    std::map<std::string, ImGui_Texture> theme_information_bar_notice;
+    std::map<NoticeIcon, ImGui_Texture> theme_information_bar_notice;
 
     std::map<time_t, ImGui_Texture> notice_info_icon;
 
@@ -277,7 +295,7 @@ struct GuiState {
 
     std::map<std::string, ImGui_Texture> apps_background;
 
-    std::map<std::string, ImU32> information_bar_color;
+    InfoBarColor information_bar_color;
 
     std::map<std::string, std::map<std::string, ImGui_Texture>> live_area_contents;
     std::map<std::string, std::map<std::string, std::map<std::string, std::vector<ImGui_Texture>>>> live_items;

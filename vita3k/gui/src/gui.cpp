@@ -332,7 +332,7 @@ void init_app_background(GuiState &gui, HostState &host, const std::string &app_
 }
 
 static bool get_user_apps(GuiState &gui, HostState &host) {
-    const auto apps_cache_path{ fs::path(host.base_path) / "cache/apps.dat" };
+    const auto apps_cache_path{ fs::path(host.pref_path) / "ux0/temp/apps.dat" };
     fs::ifstream apps_cache(apps_cache_path, std::ios::in | std::ios::binary);
     if (apps_cache.is_open()) {
         gui.app_selector.user_apps.clear();
@@ -381,19 +381,17 @@ static bool get_user_apps(GuiState &gui, HostState &host) {
         }
 
         init_apps_icon(gui, host, gui.app_selector.user_apps);
-
-        return true;
     }
 
-    return false;
+    return !gui.app_selector.user_apps.empty();
 }
 
 void save_apps_cache(GuiState &gui, HostState &host) {
-    const auto cache_path{ fs::path(host.base_path) / "cache" };
-    if (!fs::exists(cache_path))
-        fs::create_directory(cache_path);
+    const auto temp_path{ fs::path(host.pref_path) / "ux0/temp" };
+    if (!fs::exists(temp_path))
+        fs::create_directory(temp_path);
 
-    fs::ofstream apps_cache(cache_path / "apps.dat", std::ios::out | std::ios::binary);
+    fs::ofstream apps_cache(temp_path / "apps.dat", std::ios::out | std::ios::binary);
     if (apps_cache.is_open()) {
         // Write Size of apps list
         const auto size = gui.app_selector.user_apps.size();
@@ -431,7 +429,7 @@ void save_apps_cache(GuiState &gui, HostState &host) {
 
 void init_home(GuiState &gui, HostState &host) {
     const auto is_cmd = host.cfg.run_app_path || host.cfg.content_path;
-    if (!gui.configuration_menu.settings_dialog && (host.cfg.load_app_list || !is_cmd)) {
+    if (host.cfg.load_app_list || !is_cmd) {
         if (!get_user_apps(gui, host))
             init_user_apps(gui, host);
     }
@@ -582,8 +580,8 @@ static const char *const wday[] = {
     "Thursday", "Friday", "Saturday"
 };
 
-std::map<std::string, std::string> get_date_time(GuiState &gui, HostState &host, const tm &date_time) {
-    std::map<std::string, std::string> date_time_str;
+std::map<DateTime, std::string> get_date_time(GuiState &gui, HostState &host, const tm &date_time) {
+    std::map<DateTime, std::string> date_time_str;
     if (!host.io.user_id.empty()) {
         const auto day_str = !gui.lang.common.wday.empty() ? gui.lang.common.wday[date_time.tm_wday] : wday[date_time.tm_wday];
         const auto month_str = !gui.lang.common.ymonth.empty() ? gui.lang.common.ymonth[date_time.tm_mon] : ymonth[date_time.tm_mon];
@@ -591,27 +589,27 @@ std::map<std::string, std::string> get_date_time(GuiState &gui, HostState &host,
         const auto month = date_time.tm_mon + 1;
         switch (gui.users[host.io.user_id].date_format) {
         case DateFormat::YYYY_MM_DD:
-            date_time_str["date-start"] = fmt::format("{} {} ({})", month_str, date_time.tm_mday, day_str);
-            date_time_str["date"] = fmt::format("{}/{}/{}", year, month, date_time.tm_mday);
+            date_time_str[DateTime::DATE_DETAIL] = fmt::format("{} {} ({})", month_str, date_time.tm_mday, day_str);
+            date_time_str[DateTime::DATE_MINI] = fmt::format("{}/{}/{}", year, month, date_time.tm_mday);
             break;
         case DateFormat::DD_MM_YYYY: {
             const auto small_month_str = !gui.lang.common.small_ymonth.empty() ? gui.lang.common.small_ymonth[date_time.tm_mon] : small_ymonth[date_time.tm_mon];
-            date_time_str["date-start"] = fmt::format("{} {} ({})", date_time.tm_mday, small_month_str, day_str);
-            date_time_str["date"] = fmt::format("{}/{}/{}", date_time.tm_mday, month, year);
+            date_time_str[DateTime::DATE_DETAIL] = fmt::format("{} {} ({})", date_time.tm_mday, small_month_str, day_str);
+            date_time_str[DateTime::DATE_MINI] = fmt::format("{}/{}/{}", date_time.tm_mday, month, year);
             break;
         }
         case DateFormat::MM_DD_YYYY:
-            date_time_str["date-start"] = fmt::format("{} {} ({})", month_str, date_time.tm_mday, day_str);
-            date_time_str["date"] = fmt::format("{}/{}/{}", month, date_time.tm_mday, year);
+            date_time_str[DateTime::DATE_DETAIL] = fmt::format("{} {} ({})", month_str, date_time.tm_mday, day_str);
+            date_time_str[DateTime::DATE_MINI] = fmt::format("{}/{}/{}", month, date_time.tm_mday, year);
             break;
         default: break;
         }
     }
     const auto is_afternoon = date_time.tm_hour > 12;
     const auto clock_12h = is_afternoon && (host.io.user_id.empty() || gui.users[host.io.user_id].clock_12_hour);
-    date_time_str["hour"] = std::to_string(clock_12h ? (date_time.tm_hour - 12) : date_time.tm_hour);
-    date_time_str["clock"] = fmt::format("{}:{:0>2d}", date_time_str["hour"], date_time.tm_min);
-    date_time_str["day-moment"] = is_afternoon ? "PM" : "AM";
+    date_time_str[DateTime::HOUR] = std::to_string(clock_12h ? (date_time.tm_hour - 12) : date_time.tm_hour);
+    date_time_str[DateTime::CLOCK] = fmt::format("{}:{:0>2d}", date_time_str[DateTime::HOUR], date_time.tm_min);
+    date_time_str[DateTime::DAY_MOMENT] = is_afternoon ? "PM" : "AM";
 
     return date_time_str;
 }

@@ -1690,9 +1690,10 @@ struct SceGxmPrecomputedDraw {
     SceGxmIndexFormat index_format;
     Ptr<const void> index_data;
     uint32_t vertex_count;
+    uint32_t instance_count;
 };
 
-static constexpr size_t SCE_GXM_PRECOMPUTED_FRAGMENT_STATE_EXTRA_SIZE = sizeof(TextureDatas) + sizeof(UniformBuffers);
+static constexpr size_t SCE_GXM_PRECOMPUTED_STATE_EXTRA_SIZE = sizeof(TextureDatas) + sizeof(UniformBuffers);
 
 struct SceGxmPrecomputedFragmentState {
     Ptr<const SceGxmFragmentProgram> program;
@@ -1703,10 +1704,11 @@ struct SceGxmPrecomputedFragmentState {
     Ptr<UniformBuffers> uniform_buffers;
 };
 
-static constexpr size_t SCE_GXM_PRECOMPUTED_VERTEX_STATE_EXTRA_SIZE = sizeof(UniformBuffers);
-
 struct SceGxmPrecomputedVertexState {
     Ptr<const SceGxmVertexProgram> program;
+
+    Ptr<TextureDatas> textures;
+    uint16_t texture_count;
 
     Ptr<UniformBuffers> uniform_buffers;
 };
